@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, List
@@ -70,9 +71,15 @@ class AssetSplitPipeline:
         asset_dir = project_dir / "assets"
         mask_dir = project_dir / "masks"
         preview_dir = project_dir / "preview"
+        source_dir = project_dir / "source"
         asset_dir.mkdir(parents=True, exist_ok=True)
         mask_dir.mkdir(parents=True, exist_ok=True)
         preview_dir.mkdir(parents=True, exist_ok=True)
+        source_dir.mkdir(parents=True, exist_ok=True)
+
+        source_suffix = image_path.suffix.lower() or ".png"
+        source_file = f"source/source{source_suffix}"
+        shutil.copy2(image_path, project_dir / source_file)
 
         if self.mode == "mock":
             detections = self._mock_detect(image.width, image.height, prompts)
@@ -121,6 +128,7 @@ class AssetSplitPipeline:
             prompts=prompts,
             assets=assets,
             preview_image="preview/overlay.png",
+            source_file=source_file,
         )
         (project_dir / "scene.json").write_text(
             json.dumps(manifest.model_dump(), ensure_ascii=False, indent=2),
