@@ -1,0 +1,134 @@
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, List
+from uuid import uuid4
+
+import numpy as np
+from PIL import Image
+
+from app.models import AssetRecord, BBox, SceneManifest
+
+
+@dataclass
+class Detection:
+    label: str
+    confidence: float
+    bbox: tuple[int, int, int, int]
+
+
+class AssetSplitPipeline:
+    """MVP asset splitting pipeline.
+
+    `mock` mode is intentionally dependency-light so the entire upload ->
+    manifest -> transparent PNG export path can be tested before installing
+    GroundingDINO/SAM2. `grounded_sam2` is the production target adapter.
+    """
+
+    def __init__(self, workspace: str | Path):
+        self.workspace = Path(workspace)
+        self.workspace.mkdir(parents=True, exist_ok=True)
+        self.mode = os.getenv("GAME_CREATER_MODE", "mock").strip().lower()
+
+    def run(self, image_path: str | Path, prompts: Iterable[str]) -> SceneManifest:
+        prompts = [p.strip() for p in prompts if p.strip()]
+        if not prompts:
+            prompts = ["asset"]
+
+        image = Image.open(image_path).convert("RGBA")
+        scene_id = uuid4().hex[:12]
+        project_dir = self.workspace / scene_id
+        asset_dir = project_dir / "assets"
+        mask_dir = project_dir / "masks"
+        asset_dir.mkdir(parents=True, exist_ok=True)
+        mask_dir.mkdir(parents=True, exist_ok=True)
+
+        if self.mode == "mock":
+            detections = self._mock_detect(image.width, image.height, prompts)
+            masks = [self._rect_mask(image.width, image.height, d.bbox) for d in detections]
+        elif self.mode == "grounded_sam2":
+            detections, masks = self._grounded_sam2(image, prompts)
+        else:
+            raise ValueError(f"Unsupported GAME_CREATER_MODE={self.mode!r}")
+
+        assets: List[AssetRecord] = []
+        counters: dict[str, int] = {}
+        for detection, mask in zip(detections, masks):
+            slug = self._slug(detection.label)
+            counters[slug] = counters.get(slug, 0) + 1
+            stem = f"{slug}_{counters[slug]:03d}"
+
+            x1, y1, x2, y2 = detection.bbox
+            alpha = Image.fromarray((mask.astype(np.uint8) * 255), mode="L")
+            rgba = image.copy()
+            rgba.putalpha(alpha)
+            cropped = rgba.crop((x1, y1, x2, y2))
+            cropped.save(asset_dir / f"{stem}.png")
+            alpha.crop((x1, y1, x2, y2)).save(mask_dir / f"{stem}.png")
+
+            assets.append(
+                AssetRecord(
+                    id=f"asset_{len(assets)+1:04d}",
+                    label=detection.label,
+                    confidence=detection.confidence,
+                    bbox=BBox(x1=x1, y1=y1, x2=x2, y2=y2),
+                    image=f"assets/{stem}.png",
+                    mask=f"masks/{stem}.png",
+                    source_position={"x": x1, "y": y1},
+                )
+            )
+
+        manifest = SceneManifest(
+            scene_id=scene_id,
+            source_image=Path(image_path).name,
+            width=image.width,
+            height=image.height,
+            mode=self.mode,
+            prompts=prompts,
+            assets=assets,
+        )
+        (project_dir / "scene.json").write_text(
+            json.dumps(manifest.model_dump(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return manifest
+
+    def _mock_detect(self, width: int, height: int, prompts: list[str]) -> list[Detection]:
+        """Generate deterministic boxes solely to validate the product workflow."""
+        detections: list[Detection] = []
+        n = min(len(prompts), 6)
+        cell_w = max(width // max(n, 1), 1)
+        margin_x = max(width // 50, 2)
+        margin_y = max(height // 12, 2)
+
+        for index, label in enumerate(prompts[:n]):
+            x1 = min(index * cell_w + margin_x, width - 1)
+            x2 = min((index + 1) * cell_w - margin_x, width)
+            y1 = margin_y
+            y2 = max(height - margin_y, y1 + 1)
+            if x2 <= x1:
+                x2 = min(x1 + 1, width)
+            detections.append(Detection(label=label, confidence=0.5, bbox=(x1, y1, x2, y2)))
+        return detections
+
+    @staticmethod
+    def _rect_mask(width: int, height: int, bbox: tuple[int, int, int, int]) -> np.ndarray:
+        mask = np.zeros((height, width), dtype=bool)
+        x1, y1, x2, y2 = bbox
+        mask[y1:y2, x1:x2] = True
+        return mask
+
+    def _grounded_sam2(self, image: Image.Image, prompts: list[str]):
+        raise RuntimeError(
+            "Grounded-SAM2 adapter is not installed yet. "
+            "Use GAME_CREATER_MODE=mock to validate the MVP workflow, then wire "
+            "GroundingDINO + SAM2 in this method."
+        )
+
+    @staticmethod
+    def _slug(value: str) -> str:
+        safe = "".join(ch.lower() if ch.isalnum() else "_" for ch in value).strip("_")
+        return safe or "asset"
