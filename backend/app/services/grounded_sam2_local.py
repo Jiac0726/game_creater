@@ -234,6 +234,68 @@ class GroundedSam2LocalAdapter:
         }
         return detections, kept_masks
 
+    def segment_points(
+        self,
+        image_path: str | Path,
+        points: list[tuple[int, int]],
+        point_labels: list[int],
+        *,
+        box: tuple[int, int, int, int] | None = None,
+    ) -> tuple[np.ndarray, float]:
+        """Segment one object using positive/negative SAM2 point prompts.
+
+        ``point_labels`` uses SAM convention: 1 = positive/foreground,
+        0 = negative/background. When refining an existing asset, its bbox can
+        be supplied as an additional box prompt.
+        """
+        if not points:
+            raise ValueError("At least one SAM point prompt is required")
+        if len(points) != len(point_labels):
+            raise ValueError("points and point_labels must have the same length")
+        if not any(int(value) == 1 for value in point_labels):
+            raise ValueError("At least one positive SAM point is required")
+
+        self._ensure_loaded()
+        assert self._load_image is not None
+        assert self._sam2_predictor is not None
+
+        image_source, _ = self._load_image(str(image_path))
+        height, width = image_source.shape[:2]
+        coords = np.asarray(points, dtype=np.float32)
+        labels = np.asarray(point_labels, dtype=np.int32)
+        if np.any(coords[:, 0] < 0) or np.any(coords[:, 0] >= width):
+            raise ValueError("SAM point x coordinate is outside the source image")
+        if np.any(coords[:, 1] < 0) or np.any(coords[:, 1] >= height):
+            raise ValueError("SAM point y coordinate is outside the source image")
+
+        box_array = None
+        if box is not None:
+            x1, y1, x2, y2 = box
+            if not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height):
+                raise ValueError("SAM box prompt is outside the source image")
+            box_array = np.asarray(box, dtype=np.float32)
+
+        self._sam2_predictor.set_image(image_source)
+        masks, scores, _ = self._sam2_predictor.predict(
+            point_coords=coords,
+            point_labels=labels,
+            box=box_array,
+            multimask_output=True,
+        )
+        masks = np.asarray(masks)
+        score_values = np.asarray(scores, dtype=np.float32).reshape(-1)
+        if masks.ndim == 2:
+            masks = masks[None, ...]
+        if masks.ndim == 4:
+            masks = masks.squeeze(1)
+        if len(masks) == 0:
+            raise RuntimeError("SAM2 returned no masks for the point prompt")
+
+        best_index = int(np.argmax(score_values)) if len(score_values) else 0
+        best_index = min(best_index, len(masks) - 1)
+        best_score = float(score_values[best_index]) if len(score_values) else 0.0
+        return np.asarray(masks[best_index], dtype=bool), best_score
+
     def _ensure_loaded(self) -> None:
         if self._grounding_model is not None and self._sam2_predictor is not None:
             return
