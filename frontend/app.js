@@ -13,6 +13,19 @@ const viewerHint = $("viewerHint");
 const manifestLink = $("manifestLink");
 const archiveLink = $("archiveLink");
 
+const ASSET_CATEGORIES = [
+  "uncategorized",
+  "vegetation",
+  "terrain",
+  "structure",
+  "prop",
+  "building",
+  "vehicle",
+  "creature",
+  "effect",
+  "material",
+];
+
 let currentManifest = null;
 let localPreviewUrl = null;
 
@@ -108,7 +121,7 @@ analyzeBtn.addEventListener("click", async () => {
   }
 });
 
-function renderAssets(manifest) {
+function renderAssets(manifest, selectedAssetId = null) {
   assetList.innerHTML = "";
   assetList.classList.remove("empty");
   assetPreview.classList.remove("empty");
@@ -121,17 +134,23 @@ function renderAssets(manifest) {
     return;
   }
 
-  manifest.assets.forEach((asset, index) => {
+  const preferredId = selectedAssetId || manifest.assets[0].id;
+
+  manifest.assets.forEach((asset) => {
     const button = document.createElement("button");
     button.className = "asset-row";
-    button.innerHTML = `<span>${asset.label}</span><small>${Math.round(asset.confidence * 100)}%</small>`;
+    button.innerHTML = `
+      <span>${escapeHtml(asset.label)}</span>
+      <small>${escapeHtml(asset.category || "uncategorized")} · ${Math.round(asset.confidence * 100)}%</small>
+    `;
     button.addEventListener("click", () => {
       document.querySelectorAll(".asset-row").forEach((el) => el.classList.remove("selected"));
       button.classList.add("selected");
       showAsset(manifest, asset);
     });
     assetList.appendChild(button);
-    if (index === 0) {
+
+    if (asset.id === preferredId) {
       button.classList.add("selected");
       showAsset(manifest, asset);
     }
@@ -140,18 +159,91 @@ function renderAssets(manifest) {
 
 function showAsset(manifest, asset) {
   const base = `/workspace/${manifest.scene_id}/`;
+  const categories = [...ASSET_CATEGORIES];
+  if (asset.category && !categories.includes(asset.category)) categories.push(asset.category);
+
   assetPreview.innerHTML = `
-    <img src="${base}${asset.image}" alt="${asset.label}" />
+    <img src="${base}${asset.image}" alt="${escapeHtml(asset.label)}" />
     <div class="meta">
-      <strong>${asset.label}</strong>
-      <span>${asset.id}</span>
+      <strong>${escapeHtml(asset.label)}</strong>
+      <span>${escapeHtml(asset.id)}</span>
       <span>bbox: ${asset.bbox.x1}, ${asset.bbox.y1}, ${asset.bbox.x2}, ${asset.bbox.y2}</span>
+    </div>
+    <div class="asset-editor">
+      <label>
+        <span>名称</span>
+        <input id="assetLabelInput" value="${escapeAttribute(asset.label)}" />
+      </label>
+      <label>
+        <span>分类</span>
+        <select id="assetCategoryInput">
+          ${categories.map((category) => `<option value="${escapeAttribute(category)}" ${category === asset.category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
+        </select>
+      </label>
+      <label>
+        <span>备注</span>
+        <textarea id="assetNotesInput" rows="3" placeholder="例如：主场景大树、可交互道具…">${escapeHtml(asset.notes || "")}</textarea>
+      </label>
+      <button id="saveAssetBtn" class="save-asset-btn">保存素材信息</button>
     </div>
     <div class="preview-actions">
       <a href="${base}${asset.image}" download>下载透明 PNG</a>
       <a href="${base}${asset.mask}" download>下载 Mask</a>
     </div>
   `;
+
+  $("saveAssetBtn").addEventListener("click", () => saveAssetMetadata(manifest, asset));
+}
+
+async function saveAssetMetadata(manifest, asset) {
+  const saveButton = $("saveAssetBtn");
+  const payload = {
+    label: $("assetLabelInput").value.trim(),
+    category: $("assetCategoryInput").value,
+    notes: $("assetNotesInput").value.trim() || null,
+  };
+
+  if (!payload.label) {
+    message.textContent = "素材名称不能为空。";
+    return;
+  }
+
+  saveButton.disabled = true;
+  saveButton.textContent = "保存中…";
+
+  try {
+    const response = await fetch(`/api/v1/scenes/${manifest.scene_id}/assets/${asset.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const updated = await response.json();
+    if (!response.ok) throw new Error(updated.detail || "保存失败");
+
+    const index = manifest.assets.findIndex((item) => item.id === asset.id);
+    if (index >= 0) manifest.assets[index] = updated;
+    currentManifest = manifest;
+    renderAssets(manifest, updated.id);
+    message.textContent = `已保存：${updated.label} · ${updated.category}`;
+  } catch (error) {
+    message.textContent = `保存失败：${error.message}`;
+    saveButton.disabled = false;
+    saveButton.textContent = "保存素材信息";
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  })[char]);
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value).replace(/`/g, "&#096;");
 }
 
 loadHealth();
