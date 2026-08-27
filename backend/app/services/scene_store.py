@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.models import AssetPatch, AssetRecord, SceneManifest
+from app.services.asset_scoring import score_from_components
+from app.services.semantic_scoring import semantic_asset_value
 
 
 class SceneNotFoundError(FileNotFoundError):
@@ -61,6 +63,19 @@ class SceneStore:
                 updates["category"] = category or "uncategorized"
 
             updated = asset.model_copy(update=updates)
+
+            if "label" in updates and updated.score_components:
+                score, components = score_from_components(
+                    updated.score_components,
+                    semantic_value=semantic_asset_value(updated.label),
+                )
+                updated = updated.model_copy(
+                    update={
+                        "asset_score": score,
+                        "score_components": components,
+                    }
+                )
+
             manifest.assets[index] = updated
             self.save(manifest)
             return updated
