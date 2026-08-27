@@ -40,3 +40,11 @@ jobs:
           node --check ../frontend/app.js
           node --check ../frontend/semantic.js
           node --check ../frontend/point_prompt.js
+
+      - name: Check local GPU helper scripts
+        run: |
+          bash -n ../scripts/setup_grounded_sam2_wsl.sh
+          bash -n ../scripts/start_grounded_sam2_wsl.sh
+          python ../scripts/verify_grounded_sam2_env.py --help >/dev/null
+          python ../scripts/smoke_test_grounded_sam2.py --help >/dev/null
+          python ../scripts/validate_scene_output.py --help >/dev/null
