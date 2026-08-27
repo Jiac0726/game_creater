@@ -3,18 +3,65 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Game Creater v0.2 dev</title>
+  <title>Game Creater v0.3 dev</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/semantic.css" />
 </head>
 <body>
   <main class="shell">
     <header>
       <div>
         <p class="eyebrow">GAME ASSET FACTORY</p>
-        <h1>游戏素材 AI 拆解器 <span>v0.2 dev</span></h1>
+        <h1>游戏素材 AI 生产工具 <span>v0.3 dev</span></h1>
       </div>
       <div id="health" class="status">连接中…</div>
     </header>
+
+    <section class="card semantic-panel">
+      <div class="semantic-head">
+        <div>
+          <h2>游戏素材语义联想</h2>
+          <p>中文概念 → 本地素材本体 → 关键词组 → GroundingDINO 英文 Prompt</p>
+        </div>
+        <span class="semantic-badge">OFFLINE · NO API</span>
+      </div>
+
+      <div class="semantic-controls">
+        <label>
+          <span>场景 / 概念关键词</span>
+          <input id="semanticInput" value="废弃地铁站" placeholder="例如：魔法森林、赛博朋克小巷、海边渔村" />
+        </label>
+        <label>
+          <span>展开深度</span>
+          <select id="semanticDepth">
+            <option value="1">1 · 基础</option>
+            <option value="2" selected>2 · 状态组合</option>
+            <option value="3">3 · 深度</option>
+          </select>
+        </label>
+        <label>
+          <span>每组上限</span>
+          <select id="semanticMaxPerGroup">
+            <option value="8">8</option>
+            <option value="12" selected>12</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+          </select>
+        </label>
+        <div class="semantic-actions">
+          <button id="semanticExpandBtn">生成关键词组</button>
+          <button id="semanticApplyBtn" disabled>应用到拆图</button>
+          <button id="semanticAnalyzeBtn" disabled>联想并拆图</button>
+        </div>
+      </div>
+
+      <div id="semanticExamples" class="semantic-examples"></div>
+
+      <div id="semanticResult" class="semantic-result hidden">
+        <div id="semanticSummary" class="semantic-summary"></div>
+        <div id="semanticGroups" class="semantic-groups"></div>
+      </div>
+    </section>
 
     <section class="toolbar card">
       <label class="upload">
@@ -23,7 +70,7 @@
         <span id="fileName">选择 PNG / JPG / WEBP</span>
       </label>
       <label>
-        <strong>目标关键词</strong>
+        <strong>目标关键词 / GroundingDINO Prompt</strong>
         <input id="promptInput" value="tree, rock, house, crate, grass" />
       </label>
       <button id="analyzeBtn">AI 拆解</button>
@@ -57,7 +104,7 @@
     </section>
 
     <section class="card footerbar">
-      <span id="message">上传图片后可 AI 拆解，并手动删除、合并或拖拽矩形拆分 Mask。</span>
+      <span id="message">先输入中文概念生成素材关键词，也可以直接上传图片并手动输入检测 Prompt。</span>
       <div class="footer-actions">
         <a id="manifestLink" class="hidden" target="_blank">打开 scene.json</a>
         <a id="archiveLink" class="hidden">下载全部 ZIP</a>
@@ -65,5 +112,6 @@
     </section>
   </main>
   <script src="/app.js"></script>
+  <script src="/semantic.js"></script>
 </body>
 </html>
