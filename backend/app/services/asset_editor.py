@@ -12,6 +12,7 @@ from app.models import (
     BBox,
     SceneManifest,
 )
+from app.services.asset_scoring import score_asset
 from app.services.scene_store import AssetNotFoundError, SceneStore
 
 
@@ -163,6 +164,13 @@ class AssetEditor:
         bbox = self._bbox_from_mask(mask)
         asset_id = asset_id or self._next_asset_id(manifest)
         stem = f"{asset_id}_{self._slug(label)}"
+        asset_score, score_components = score_asset(
+            mask=mask,
+            confidence=confidence,
+            scene_width=manifest.width,
+            scene_height=manifest.height,
+            bbox=bbox,
+        )
 
         alpha = Image.fromarray(mask.astype(np.uint8) * 255, mode="L")
         rgba = source.copy()
@@ -179,6 +187,8 @@ class AssetEditor:
             label=label,
             category=category or "uncategorized",
             confidence=float(confidence),
+            asset_score=asset_score,
+            score_components=score_components,
             bbox=bbox,
             image=image_rel,
             mask=mask_rel,
