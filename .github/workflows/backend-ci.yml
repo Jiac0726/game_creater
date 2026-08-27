@@ -32,4 +32,5 @@ jobs:
       - name: Run tests
         env:
           GAME_CREATER_MODE: mock
-        run: pytest -q
+          PYTHONPATH: .
+        run: python -m pytest -q
