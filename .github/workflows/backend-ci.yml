@@ -36,4 +36,6 @@ jobs:
         run: python -m pytest -q
 
       - name: Check frontend JavaScript syntax
-        run: node --check ../frontend/app.js
+        run: |
+          node --check ../frontend/app.js
+          node --check ../frontend/semantic.js
