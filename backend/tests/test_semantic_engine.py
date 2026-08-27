@@ -32,6 +32,29 @@ def test_semantic_engine_expands_magic_forest() -> None:
     assert len(result.detection_prompts) <= 40
 
 
+def test_depth_three_produces_at_least_as_many_variants_as_depth_two() -> None:
+    engine = SemanticEngine()
+
+    depth_two = engine.expand("废弃地铁站", depth=2, max_per_group=30)
+    depth_three = engine.expand("废弃地铁站", depth=3, max_per_group=30)
+
+    variants_two = [
+        item
+        for group in depth_two.groups
+        for item in group.items
+        if item.source.startswith("variant:")
+    ]
+    variants_three = [
+        item
+        for group in depth_three.groups
+        for item in group.items
+        if item.source.startswith("variant:")
+    ]
+
+    assert len(variants_two) > 0
+    assert len(variants_three) >= len(variants_two)
+
+
 def test_semantic_engine_unknown_keyword_returns_warning() -> None:
     engine = SemanticEngine()
 
