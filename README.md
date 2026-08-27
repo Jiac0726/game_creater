@@ -9,7 +9,7 @@
 → GroundingDINO + SAM2/SAM2.1 图片拆解
 → 透明 PNG / Mask / Overlay
 → 人工删除 / 合并 / 拆分 / 重命名
-→ Asset Score
+→ 语义增强 Asset Score
 → 场景本体覆盖率 / 缺失素材推荐
 → scene.json / ZIP
 ```
@@ -39,7 +39,8 @@
 - 矩形拆分一个 Mask 为两个资产
 - Scene Viewer 鼠标拖拽矩形并自动换算原图坐标
 - 编辑后自动重建透明 PNG / Mask / Overlay / JSON
-- Asset Score v0：综合置信度、面积、Mask 填充度、边界完整度
+- 语义增强 Asset Score：置信度 + 几何质量 + 本体语义价值
+- 改名、合并、拆分后自动重新计算语义分
 
 ### v0.3 本地游戏素材语义联想
 
@@ -56,7 +57,7 @@
 - 对已拆解场景计算本体素材覆盖率
 - 自动列出“本体推荐但场景未检测到”的缺失素材
 - 缺失素材可一键追加回 GroundingDINO Prompt
-- 概念和修饰词目录 API
+- Game Asset Ontology 参与 Asset Score 语义价值评分
 
 当前首批本体覆盖：
 
@@ -97,6 +98,7 @@ game_creater/
 │  │     ├─ asset_editor.py
 │  │     ├─ asset_scoring.py
 │  │     ├─ semantic_engine.py
+│  │     ├─ semantic_scoring.py
 │  │     └─ scene_recommender.py
 │  ├─ tests/
 │  │  ├─ test_mock_pipeline.py
@@ -104,6 +106,7 @@ game_creater/
 │  │  ├─ test_asset_editor.py
 │  │  ├─ test_asset_scoring.py
 │  │  ├─ test_semantic_engine.py
+│  │  ├─ test_semantic_scoring.py
 │  │  └─ test_scene_recommender.py
 │  └─ requirements*.txt
 ├─ data/
@@ -154,7 +157,7 @@ Mock 不做真实 AI 识别，但语义联想和完整素材处理链都是真�
 → Prompt 生成
 → Mock Detection / Mask
 → RGBA PNG
-→ Asset Score
+→ 语义增强 Asset Score
 → Overlay
 → scene.json
 → 人工编辑
@@ -221,19 +224,9 @@ GET  /api/v1/semantic/catalog
 POST /api/v1/semantic/expand
 ```
 
-请求示例：
-
-```json
-{
-  "keyword": "魔法森林",
-  "depth": 2,
-  "max_per_group": 12
-}
-```
-
 ## 3. 场景覆盖率与缺失素材推荐
 
-完成一次场景拆解后，可以调用：
+完成一次场景拆解后：
 
 ```text
 POST /api/v1/scenes/<scene_id>/recommendations
@@ -269,8 +262,6 @@ POST /api/v1/scenes/<scene_id>/recommendations
 
 推荐器只比较可独立检测/制作的实体组，并排除状态变体；会同时尝试匹配英文标签和用户改名后的中文标签。
 
-缺失项在前端可直接点击加入 GroundingDINO Prompt，用于第二轮补充检测。
-
 ## 4. GroundingDINO + SAM2 本地真实模式
 
 推荐环境：
@@ -303,13 +294,6 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 环境变量参考 `config/grounded_sam2.env.example`。
 
-健康检查：
-
-```text
-GET /api/health
-GET /api/v1/models/status
-```
-
 ## 5. 人工校正 API
 
 ```text
@@ -320,24 +304,40 @@ POST   /api/v1/scenes/<scene_id>/assets/<asset_id>/split
 GET    /api/v1/scenes/<scene_id>/export.zip
 ```
 
-## 6. Asset Score v0
+## 6. 语义增强 Asset Score
 
-当前只作为排序/过滤基础，不会自动删除素材。
+Asset Score 当前范围 `0–1`，只用于排序、筛选和辅助判断，不会自动删除素材。
+
+当前权重：
 
 ```text
-45% 检测置信度
-25% 相对面积
-15% Mask 填充度
-15% 边界完整度
+35% 检测置信度
+20% 相对面积
+12% Mask 填充度
+13% 边界完整度
+20% Game Asset Ontology 语义价值
 ```
 
-未来会加入：
+语义价值：
 
 ```text
-Game Asset Ontology 语义价值分
+本体精确资产词：1.00
+已知资产的修饰/拆分形式：约 0.86
+近似本体资产：0.64–0.78
+当前本体未知资产：0.45（中性底分，不直接判无效）
+```
+
+例如 `tree`、`ticket gate`、`木箱` 会获得明确语义加分；`tree_part_a` 仍可识别为树的拆分部分。完全未收录的新素材不会得到 0 分，避免小词库造成误杀。
+
+人工修改 label 后会只利用已有几何组件重新计算语义值和总分，无需重新跑 AI 或 Mask。
+
+未来还会加入：
+
+```text
 重复度
 遮挡率
 素材独立性
+场景概念相关性
 ```
 
 ## 7. 输出结构
@@ -355,8 +355,6 @@ workspace/<scene_id>/
 
 ## 8. 测试与 CI
 
-本地：
-
 ```bash
 cd backend
 python -m pip install -r requirements-dev.txt
@@ -372,13 +370,14 @@ GitHub Actions 当前验证：
 → 中文概念匹配
 → 修饰词与状态变体
 → 英文 Prompt 生成
-→ 场景本体覆盖率 / 缺失素材推荐
+→ 本体语义资产评分
+→ 场景覆盖率 / 缺失素材推荐
 → Detection / Mask
 → RGBA PNG
-→ Asset Score
+→ 语义增强 Asset Score
 → Overlay
 → scene.json
-→ 元数据持久化
+→ 改名后重算语义分
 → 删除 / 合并 / 拆分
 → ZIP
 → 前端 JavaScript 语法
@@ -402,7 +401,7 @@ GitHub Actions 当前验证：
 - [x] 多 Mask 合并
 - [x] 矩形拆分 Mask
 - [x] Scene Viewer 鼠标拖拽拆分
-- [x] Asset Score v0
+- [x] 语义增强 Asset Score
 - [ ] SAM 点击添加 / 修正 Mask
 - [ ] 多实例过滤和去重
 
@@ -415,9 +414,9 @@ GitHub Actions 当前验证：
 - [x] Web 关键词树
 - [x] 一键应用 Prompt / 联想并拆图
 - [x] 场景覆盖率和缺失素材推荐
+- [x] 本体语义价值接入 Asset Score
 - [ ] 扩充本体词库
 - [ ] Embedding 候选召回层
-- [ ] 把语义价值加入 Asset Score
 
 ### 后续
 
