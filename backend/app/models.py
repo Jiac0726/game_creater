@@ -56,3 +56,32 @@ class SceneManifest(BaseModel):
     assets: List[AssetRecord]
     preview_image: Optional[str] = None
     source_file: Optional[str] = None
+
+
+class SemanticExpandRequest(BaseModel):
+    keyword: str
+    depth: int = 2
+    max_per_group: int = 12
+
+
+class SemanticKeyword(BaseModel):
+    zh: str
+    en: str
+    score: float
+    source: str
+
+
+class SemanticGroup(BaseModel):
+    key: str
+    label_zh: str
+    items: List[SemanticKeyword]
+
+
+class SemanticExpansion(BaseModel):
+    input: str
+    matched_concept: Optional[str] = None
+    matched_concept_label: Optional[str] = None
+    modifiers: List[str] = Field(default_factory=list)
+    groups: List[SemanticGroup] = Field(default_factory=list)
+    detection_prompts: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
