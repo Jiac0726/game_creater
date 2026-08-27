@@ -83,11 +83,22 @@ class AssetSplitPipeline:
         source_file = f"source/source{source_suffix}"
         shutil.copy2(image_path, project_dir / source_file)
 
+        inference_stats: dict[str, int | float]
         if self.mode == "mock":
             detections = self._mock_detect(image.width, image.height, prompts)
             masks = [self._rect_mask(image.width, image.height, d.bbox) for d in detections]
+            count = len(detections)
+            inference_stats = {
+                "raw_detections": count,
+                "valid_detections": count,
+                "after_box_dedupe": count,
+                "after_mask_dedupe": count,
+                "box_duplicates_removed": 0,
+                "mask_duplicates_removed": 0,
+            }
         elif self.mode in {"grounded_sam2", "grounded_sam2_local"}:
             detections, masks = self._grounded_sam2(image_path, prompts)
+            inference_stats = dict(self._get_grounded_adapter().last_stats)
         else:
             raise ValueError(f"Unsupported GAME_CREATER_MODE={self.mode!r}")
 
@@ -143,6 +154,7 @@ class AssetSplitPipeline:
             assets=assets,
             preview_image="preview/overlay.png",
             source_file=source_file,
+            inference_stats=inference_stats,
         )
         (project_dir / "scene.json").write_text(
             json.dumps(manifest.model_dump(), ensure_ascii=False, indent=2),
