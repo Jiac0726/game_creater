@@ -10,6 +10,7 @@
 → 透明 PNG / Mask / Overlay
 → 人工删除 / 合并 / 拆分 / 重命名
 → Asset Score
+→ 场景本体覆盖率 / 缺失素材推荐
 → scene.json / ZIP
 ```
 
@@ -52,6 +53,9 @@
 - Web UI 展示语义关键词树
 - 一键“应用到拆图”
 - 已上传图片时可“一键联想并拆图”
+- 对已拆解场景计算本体素材覆盖率
+- 自动列出“本体推荐但场景未检测到”的缺失素材
+- 缺失素材可一键追加回 GroundingDINO Prompt
 - 概念和修饰词目录 API
 
 当前首批本体覆盖：
@@ -92,13 +96,15 @@ game_creater/
 │  │     ├─ scene_store.py
 │  │     ├─ asset_editor.py
 │  │     ├─ asset_scoring.py
-│  │     └─ semantic_engine.py
+│  │     ├─ semantic_engine.py
+│  │     └─ scene_recommender.py
 │  ├─ tests/
 │  │  ├─ test_mock_pipeline.py
 │  │  ├─ test_scene_store.py
 │  │  ├─ test_asset_editor.py
 │  │  ├─ test_asset_scoring.py
-│  │  └─ test_semantic_engine.py
+│  │  ├─ test_semantic_engine.py
+│  │  └─ test_scene_recommender.py
 │  └─ requirements*.txt
 ├─ data/
 │  └─ game_asset_ontology.json
@@ -152,6 +158,7 @@ Mock 不做真实 AI 识别，但语义联想和完整素材处理链都是真�
 → Overlay
 → scene.json
 → 人工编辑
+→ 缺失素材推荐
 → ZIP
 ```
 
@@ -197,6 +204,7 @@ cable
 - `应用到拆图`：写入下方 GroundingDINO Prompt 输入框
 - `联想并拆图`：已上传图片时直接开始图片拆解
 - 点击单个语义词：可手动添加/移除检测 Prompt
+- `检查缺失素材`：拆图后比较当前场景资产与本体候选
 
 展开深度：
 
@@ -223,19 +231,47 @@ POST /api/v1/semantic/expand
 }
 ```
 
-主要响应字段：
+## 3. 场景覆盖率与缺失素材推荐
+
+完成一次场景拆解后，可以调用：
+
+```text
+POST /api/v1/scenes/<scene_id>/recommendations
+```
+
+请求：
 
 ```json
 {
-  "matched_concept": "forest",
-  "matched_concept_label": "森林",
-  "modifiers": ["魔法"],
-  "groups": [],
-  "detection_prompts": []
+  "keyword": "森林",
+  "max_results": 20,
+  "min_semantic_score": 0.65
 }
 ```
 
-## 3. GroundingDINO + SAM2 本地真实模式
+响应包含：
+
+```json
+{
+  "candidate_count": 23,
+  "matched_count": 8,
+  "coverage_ratio": 0.3478,
+  "missing": [
+    {
+      "zh": "灌木",
+      "en": "bush",
+      "group": "vegetation",
+      "semantic_score": 0.922
+    }
+  ]
+}
+```
+
+推荐器只比较可独立检测/制作的实体组，并排除状态变体；会同时尝试匹配英文标签和用户改名后的中文标签。
+
+缺失项在前端可直接点击加入 GroundingDINO Prompt，用于第二轮补充检测。
+
+## 4. GroundingDINO + SAM2 本地真实模式
 
 推荐环境：
 
@@ -274,7 +310,7 @@ GET /api/health
 GET /api/v1/models/status
 ```
 
-## 4. 人工校正 API
+## 5. 人工校正 API
 
 ```text
 PATCH  /api/v1/scenes/<scene_id>/assets/<asset_id>
@@ -284,7 +320,7 @@ POST   /api/v1/scenes/<scene_id>/assets/<asset_id>/split
 GET    /api/v1/scenes/<scene_id>/export.zip
 ```
 
-## 5. Asset Score v0
+## 6. Asset Score v0
 
 当前只作为排序/过滤基础，不会自动删除素材。
 
@@ -304,7 +340,7 @@ Game Asset Ontology 语义价值分
 素材独立性
 ```
 
-## 6. 输出结构
+## 7. 输出结构
 
 ```text
 workspace/<scene_id>/
@@ -317,7 +353,7 @@ workspace/<scene_id>/
 └─ scene.json
 ```
 
-## 7. 测试与 CI
+## 8. 测试与 CI
 
 本地：
 
@@ -336,6 +372,7 @@ GitHub Actions 当前验证：
 → 中文概念匹配
 → 修饰词与状态变体
 → 英文 Prompt 生成
+→ 场景本体覆盖率 / 缺失素材推荐
 → Detection / Mask
 → RGBA PNG
 → Asset Score
@@ -377,9 +414,10 @@ GitHub Actions 当前验证：
 - [x] 中文关键词 → GroundingDINO Prompt
 - [x] Web 关键词树
 - [x] 一键应用 Prompt / 联想并拆图
+- [x] 场景覆盖率和缺失素材推荐
 - [ ] 扩充本体词库
 - [ ] Embedding 候选召回层
-- [ ] 图片反向推荐缺失素材
+- [ ] 把语义价值加入 Asset Score
 
 ### 后续
 
