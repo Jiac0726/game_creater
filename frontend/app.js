@@ -4,6 +4,9 @@ const imageInput = $("imageInput");
 const promptInput = $("promptInput");
 const analyzeBtn = $("analyzeBtn");
 const scenePreview = $("scenePreview");
+const viewerStage = $("viewerStage");
+const selectionCanvas = $("selectionCanvas");
+const selectionCtx = selectionCanvas.getContext("2d");
 const assetList = $("assetList");
 const assetPreview = $("assetPreview");
 const message = $("message");
@@ -31,6 +34,8 @@ const ASSET_CATEGORIES = [
 
 let currentManifest = null;
 let localPreviewUrl = null;
+let currentSplitRect = null;
+let dragStart = null;
 const selectedAssetIds = new Set();
 
 async function loadHealth() {
@@ -70,8 +75,10 @@ imageInput.addEventListener("change", () => {
   if (!file) return;
 
   currentManifest = null;
+  currentSplitRect = null;
   selectedAssetIds.clear();
   updateSelectionBar();
+  clearSelectionCanvas();
   manifestLink.classList.add("hidden");
   archiveLink.classList.add("hidden");
   fileName.textContent = file.name;
@@ -80,7 +87,59 @@ imageInput.addEventListener("change", () => {
   localPreviewUrl = URL.createObjectURL(file);
   scenePreview.src = localPreviewUrl;
   scenePreview.style.display = "block";
+  viewerStage.style.display = "inline-block";
   viewerHint.style.display = "none";
+});
+
+scenePreview.addEventListener("load", () => {
+  syncSelectionCanvas();
+  drawCurrentSelection();
+});
+window.addEventListener("resize", () => {
+  syncSelectionCanvas();
+  drawCurrentSelection();
+});
+
+selectionCanvas.addEventListener("mousedown", (event) => {
+  if (!currentManifest) return;
+  dragStart = canvasPoint(event);
+  currentSplitRect = null;
+  clearSelectionCanvas();
+});
+
+selectionCanvas.addEventListener("mousemove", (event) => {
+  if (!dragStart || !currentManifest) return;
+  const point = canvasPoint(event);
+  drawCanvasRectangle(dragStart, point);
+});
+
+window.addEventListener("mouseup", (event) => {
+  if (!dragStart || !currentManifest) return;
+  const end = canvasPoint(event);
+  const minX = Math.max(0, Math.min(dragStart.x, end.x));
+  const minY = Math.max(0, Math.min(dragStart.y, end.y));
+  const maxX = Math.min(selectionCanvas.width, Math.max(dragStart.x, end.x));
+  const maxY = Math.min(selectionCanvas.height, Math.max(dragStart.y, end.y));
+  dragStart = null;
+
+  if (maxX - minX < 3 || maxY - minY < 3) {
+    currentSplitRect = null;
+    clearSelectionCanvas();
+    return;
+  }
+
+  const scaleX = currentManifest.width / Math.max(1, selectionCanvas.width);
+  const scaleY = currentManifest.height / Math.max(1, selectionCanvas.height);
+  currentSplitRect = {
+    x1: Math.max(0, Math.floor(minX * scaleX)),
+    y1: Math.max(0, Math.floor(minY * scaleY)),
+    x2: Math.min(currentManifest.width, Math.ceil(maxX * scaleX)),
+    y2: Math.min(currentManifest.height, Math.ceil(maxY * scaleY)),
+  };
+
+  drawCurrentSelection();
+  fillSplitInputs(currentSplitRect);
+  message.textContent = `已选择拆分矩形：(${currentSplitRect.x1}, ${currentSplitRect.y1}) → (${currentSplitRect.x2}, ${currentSplitRect.y2})`;
 });
 
 analyzeBtn.addEventListener("click", async () => {
@@ -104,6 +163,7 @@ analyzeBtn.addEventListener("click", async () => {
     if (!response.ok) throw new Error(data.detail || "分析失败");
 
     selectedAssetIds.clear();
+    currentSplitRect = null;
     applyManifest(data);
     message.textContent = `完成：${data.assets.length} 个素材 · 已生成 Overlay · 模式 ${data.mode}`;
   } catch (error) {
@@ -140,6 +200,7 @@ mergeSelectedBtn.addEventListener("click", async () => {
     if (!response.ok) throw new Error(data.detail || "合并失败");
 
     selectedAssetIds.clear();
+    currentSplitRect = null;
     const preferred = data.assets[data.assets.length - 1]?.id || null;
     applyManifest(data, preferred);
     message.textContent = `已合并为：${label.trim()}`;
@@ -183,9 +244,10 @@ function renderAssets(manifest, selectedAssetId = null) {
 
     const button = document.createElement("button");
     button.className = "asset-row";
+    const score = Math.round((asset.asset_score || 0) * 100);
     button.innerHTML = `
       <span>${escapeHtml(asset.label)}</span>
-      <small>${escapeHtml(asset.category || "uncategorized")} · ${Math.round(asset.confidence * 100)}%</small>
+      <small>${escapeHtml(asset.category || "uncategorized")} · S${score}</small>
     `;
     button.addEventListener("click", () => {
       document.querySelectorAll(".asset-row").forEach((el) => el.classList.remove("selected"));
@@ -208,12 +270,20 @@ function showAsset(manifest, asset) {
   const categories = [...ASSET_CATEGORIES];
   if (asset.category && !categories.includes(asset.category)) categories.push(asset.category);
   const midY = Math.max(asset.bbox.y1 + 1, Math.floor((asset.bbox.y1 + asset.bbox.y2) / 2));
+  const splitRect = currentSplitRect || {
+    x1: asset.bbox.x1,
+    y1: asset.bbox.y1,
+    x2: asset.bbox.x2,
+    y2: midY,
+  };
 
   assetPreview.innerHTML = `
     <img src="${base}${asset.image}?v=${Date.now()}" alt="${escapeHtml(asset.label)}" />
     <div class="meta">
       <strong>${escapeHtml(asset.label)}</strong>
       <span>${escapeHtml(asset.id)}</span>
+      <span>Asset Score: ${Math.round((asset.asset_score || 0) * 100)} / 100</span>
+      <span>检测置信度: ${Math.round((asset.confidence || 0) * 100)}%</span>
       <span>bbox: ${asset.bbox.x1}, ${asset.bbox.y1}, ${asset.bbox.x2}, ${asset.bbox.y2}</span>
     </div>
     <div class="asset-editor">
@@ -236,12 +306,12 @@ function showAsset(manifest, asset) {
 
     <div class="tool-section">
       <strong>矩形拆分 Mask</strong>
-      <small>矩形内作为 Part A，其余 Mask 作为 Part B。</small>
+      <small>可直接在中间 Scene Viewer 上拖拽；矩形内作为 Part A，其余 Mask 作为 Part B。</small>
       <div class="rect-grid">
-        <label>X1<input id="splitX1" type="number" value="${asset.bbox.x1}" /></label>
-        <label>Y1<input id="splitY1" type="number" value="${asset.bbox.y1}" /></label>
-        <label>X2<input id="splitX2" type="number" value="${asset.bbox.x2}" /></label>
-        <label>Y2<input id="splitY2" type="number" value="${midY}" /></label>
+        <label>X1<input id="splitX1" type="number" value="${splitRect.x1}" /></label>
+        <label>Y1<input id="splitY1" type="number" value="${splitRect.y1}" /></label>
+        <label>X2<input id="splitX2" type="number" value="${splitRect.x2}" /></label>
+        <label>Y2<input id="splitY2" type="number" value="${splitRect.y2}" /></label>
       </div>
       <div class="split-labels">
         <input id="insideLabel" placeholder="Part A 名称（可选）" />
@@ -291,7 +361,6 @@ async function saveAssetMetadata(manifest, asset) {
     if (index >= 0) manifest.assets[index] = updated;
     currentManifest = manifest;
     renderAssets(manifest, updated.id);
-    refreshOverlay(manifest);
     message.textContent = `已保存：${updated.label} · ${updated.category}`;
   } catch (error) {
     message.textContent = `保存失败：${error.message}`;
@@ -312,6 +381,7 @@ async function deleteAsset(manifest, asset) {
     if (!response.ok) throw new Error(data.detail || "删除失败");
 
     selectedAssetIds.delete(asset.id);
+    currentSplitRect = null;
     applyManifest(data);
     message.textContent = `已删除：${asset.label}`;
   } catch (error) {
@@ -352,6 +422,7 @@ async function splitAsset(manifest, asset) {
     if (!response.ok) throw new Error(data.detail || "拆分失败");
 
     selectedAssetIds.delete(asset.id);
+    currentSplitRect = null;
     const preferred = data.assets[data.assets.length - 2]?.id || null;
     applyManifest(data, preferred);
     message.textContent = `已拆分：${asset.label} → 2 个素材`;
@@ -382,6 +453,7 @@ function refreshOverlay(manifest) {
   if (!manifest?.preview_image) return;
   scenePreview.src = `/workspace/${manifest.scene_id}/${manifest.preview_image}?v=${Date.now()}`;
   scenePreview.style.display = "block";
+  viewerStage.style.display = "inline-block";
   viewerHint.style.display = "none";
 }
 
@@ -390,6 +462,65 @@ function updateSelectionBar() {
   selectionBar.classList.toggle("hidden", !hasScene);
   selectionCount.textContent = `已选 ${selectedAssetIds.size}`;
   mergeSelectedBtn.disabled = selectedAssetIds.size < 2;
+}
+
+function syncSelectionCanvas() {
+  const width = Math.round(scenePreview.clientWidth || 0);
+  const height = Math.round(scenePreview.clientHeight || 0);
+  if (!width || !height) return;
+  selectionCanvas.width = width;
+  selectionCanvas.height = height;
+  selectionCanvas.style.width = `${width}px`;
+  selectionCanvas.style.height = `${height}px`;
+}
+
+function canvasPoint(event) {
+  const bounds = selectionCanvas.getBoundingClientRect();
+  const scaleX = selectionCanvas.width / Math.max(1, bounds.width);
+  const scaleY = selectionCanvas.height / Math.max(1, bounds.height);
+  return {
+    x: Math.max(0, Math.min(selectionCanvas.width, (event.clientX - bounds.left) * scaleX)),
+    y: Math.max(0, Math.min(selectionCanvas.height, (event.clientY - bounds.top) * scaleY)),
+  };
+}
+
+function drawCanvasRectangle(start, end) {
+  clearSelectionCanvas();
+  selectionCtx.save();
+  selectionCtx.strokeStyle = "#7cc4ff";
+  selectionCtx.fillStyle = "rgba(124, 196, 255, 0.12)";
+  selectionCtx.lineWidth = 2;
+  selectionCtx.setLineDash([6, 4]);
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const width = Math.abs(end.x - start.x);
+  const height = Math.abs(end.y - start.y);
+  selectionCtx.fillRect(x, y, width, height);
+  selectionCtx.strokeRect(x, y, width, height);
+  selectionCtx.restore();
+}
+
+function drawCurrentSelection() {
+  clearSelectionCanvas();
+  if (!currentSplitRect || !currentManifest || !selectionCanvas.width || !selectionCanvas.height) return;
+  const scaleX = selectionCanvas.width / currentManifest.width;
+  const scaleY = selectionCanvas.height / currentManifest.height;
+  drawCanvasRectangle(
+    { x: currentSplitRect.x1 * scaleX, y: currentSplitRect.y1 * scaleY },
+    { x: currentSplitRect.x2 * scaleX, y: currentSplitRect.y2 * scaleY },
+  );
+}
+
+function clearSelectionCanvas() {
+  selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+}
+
+function fillSplitInputs(rect) {
+  if (!rect || !$("splitX1")) return;
+  $("splitX1").value = rect.x1;
+  $("splitY1").value = rect.y1;
+  $("splitX2").value = rect.x2;
+  $("splitY2").value = rect.y2;
 }
 
 function escapeHtml(value) {
