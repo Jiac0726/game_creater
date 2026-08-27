@@ -15,14 +15,34 @@ const manifestLink = $("manifestLink");
 let currentManifest = null;
 
 async function loadHealth() {
+  health.classList.remove("ok", "bad");
   try {
     const response = await fetch("/api/health");
     const data = await response.json();
-    health.textContent = `${data.mode} · API 正常`;
+    const model = data.model || {};
+
+    if (!model.ready) {
+      const missing = Object.entries(model.checks || {})
+        .filter(([, ready]) => !ready)
+        .map(([name]) => name);
+      health.textContent = `${data.mode} · 模型未就绪`;
+      health.title = missing.length ? `缺少：${missing.join(", ")}` : "模型未就绪";
+      health.classList.add("bad");
+      analyzeBtn.disabled = true;
+      message.textContent = `模型环境未就绪${missing.length ? `：${missing.join(", ")}` : ""}`;
+      return;
+    }
+
+    const device = model.device ? ` · ${model.device}` : "";
+    const loaded = model.loaded === false ? " · 待首次加载" : "";
+    health.textContent = `${data.mode}${device}${loaded}`;
+    health.title = "推理后端已就绪";
     health.classList.add("ok");
+    analyzeBtn.disabled = false;
   } catch {
     health.textContent = "API 未连接";
     health.classList.add("bad");
+    analyzeBtn.disabled = true;
   }
 }
 
@@ -65,6 +85,7 @@ analyzeBtn.addEventListener("click", async () => {
   } finally {
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = "AI 拆解";
+    loadHealth();
   }
 });
 
@@ -72,6 +93,14 @@ function renderAssets(manifest) {
   assetList.innerHTML = "";
   assetList.classList.remove("empty");
   assetPreview.classList.remove("empty");
+
+  if (!manifest.assets.length) {
+    assetList.classList.add("empty");
+    assetList.textContent = "没有检测到匹配素材，可降低阈值或调整关键词。";
+    assetPreview.classList.add("empty");
+    assetPreview.textContent = "暂无素材";
+    return;
+  }
 
   manifest.assets.forEach((asset, index) => {
     const button = document.createElement("button");
