@@ -12,6 +12,9 @@ const fileName = $("fileName");
 const viewerHint = $("viewerHint");
 const manifestLink = $("manifestLink");
 const archiveLink = $("archiveLink");
+const selectionBar = $("selectionBar");
+const selectionCount = $("selectionCount");
+const mergeSelectedBtn = $("mergeSelectedBtn");
 
 const ASSET_CATEGORIES = [
   "uncategorized",
@@ -28,6 +31,7 @@ const ASSET_CATEGORIES = [
 
 let currentManifest = null;
 let localPreviewUrl = null;
+const selectedAssetIds = new Set();
 
 async function loadHealth() {
   health.classList.remove("ok", "bad");
@@ -66,6 +70,8 @@ imageInput.addEventListener("change", () => {
   if (!file) return;
 
   currentManifest = null;
+  selectedAssetIds.clear();
+  updateSelectionBar();
   manifestLink.classList.add("hidden");
   archiveLink.classList.add("hidden");
   fileName.textContent = file.name;
@@ -97,20 +103,8 @@ analyzeBtn.addEventListener("click", async () => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "分析失败");
 
-    currentManifest = data;
-    renderAssets(data);
-
-    if (data.preview_image) {
-      scenePreview.src = `/workspace/${data.scene_id}/${data.preview_image}?v=${Date.now()}`;
-      scenePreview.style.display = "block";
-      viewerHint.style.display = "none";
-    }
-
-    manifestLink.href = `/workspace/${data.scene_id}/scene.json`;
-    manifestLink.classList.remove("hidden");
-    archiveLink.href = `/api/v1/scenes/${data.scene_id}/export.zip`;
-    archiveLink.classList.remove("hidden");
-
+    selectedAssetIds.clear();
+    applyManifest(data);
     message.textContent = `完成：${data.assets.length} 个素材 · 已生成 Overlay · 模式 ${data.mode}`;
   } catch (error) {
     message.textContent = `失败：${error.message}`;
@@ -121,14 +115,50 @@ analyzeBtn.addEventListener("click", async () => {
   }
 });
 
+mergeSelectedBtn.addEventListener("click", async () => {
+  if (!currentManifest || selectedAssetIds.size < 2) return;
+
+  const ids = [...selectedAssetIds];
+  const selected = currentManifest.assets.filter((asset) => selectedAssetIds.has(asset.id));
+  const defaultLabel = `${selected[0]?.label || "asset"}_merged`;
+  const label = window.prompt("合并后的素材名称", defaultLabel);
+  if (label === null) return;
+  if (!label.trim()) {
+    message.textContent = "合并后的名称不能为空。";
+    return;
+  }
+
+  mergeSelectedBtn.disabled = true;
+  message.textContent = `正在合并 ${ids.length} 个素材…`;
+  try {
+    const response = await fetch(`/api/v1/scenes/${currentManifest.scene_id}/assets/merge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ asset_ids: ids, label: label.trim(), keep_sources: false }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "合并失败");
+
+    selectedAssetIds.clear();
+    const preferred = data.assets[data.assets.length - 1]?.id || null;
+    applyManifest(data, preferred);
+    message.textContent = `已合并为：${label.trim()}`;
+  } catch (error) {
+    message.textContent = `合并失败：${error.message}`;
+  } finally {
+    updateSelectionBar();
+  }
+});
+
 function renderAssets(manifest, selectedAssetId = null) {
   assetList.innerHTML = "";
   assetList.classList.remove("empty");
   assetPreview.classList.remove("empty");
+  updateSelectionBar();
 
   if (!manifest.assets.length) {
     assetList.classList.add("empty");
-    assetList.textContent = "没有检测到匹配素材，可降低阈值或调整关键词。";
+    assetList.textContent = "当前场景没有素材。";
     assetPreview.classList.add("empty");
     assetPreview.textContent = "暂无素材";
     return;
@@ -137,6 +167,20 @@ function renderAssets(manifest, selectedAssetId = null) {
   const preferredId = selectedAssetId || manifest.assets[0].id;
 
   manifest.assets.forEach((asset) => {
+    const row = document.createElement("div");
+    row.className = "asset-row-shell";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "asset-select";
+    checkbox.checked = selectedAssetIds.has(asset.id);
+    checkbox.title = "选择后可批量合并";
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) selectedAssetIds.add(asset.id);
+      else selectedAssetIds.delete(asset.id);
+      updateSelectionBar();
+    });
+
     const button = document.createElement("button");
     button.className = "asset-row";
     button.innerHTML = `
@@ -148,7 +192,9 @@ function renderAssets(manifest, selectedAssetId = null) {
       button.classList.add("selected");
       showAsset(manifest, asset);
     });
-    assetList.appendChild(button);
+
+    row.append(checkbox, button);
+    assetList.appendChild(row);
 
     if (asset.id === preferredId) {
       button.classList.add("selected");
@@ -161,9 +207,10 @@ function showAsset(manifest, asset) {
   const base = `/workspace/${manifest.scene_id}/`;
   const categories = [...ASSET_CATEGORIES];
   if (asset.category && !categories.includes(asset.category)) categories.push(asset.category);
+  const midY = Math.max(asset.bbox.y1 + 1, Math.floor((asset.bbox.y1 + asset.bbox.y2) / 2));
 
   assetPreview.innerHTML = `
-    <img src="${base}${asset.image}" alt="${escapeHtml(asset.label)}" />
+    <img src="${base}${asset.image}?v=${Date.now()}" alt="${escapeHtml(asset.label)}" />
     <div class="meta">
       <strong>${escapeHtml(asset.label)}</strong>
       <span>${escapeHtml(asset.id)}</span>
@@ -186,13 +233,33 @@ function showAsset(manifest, asset) {
       </label>
       <button id="saveAssetBtn" class="save-asset-btn">保存素材信息</button>
     </div>
+
+    <div class="tool-section">
+      <strong>矩形拆分 Mask</strong>
+      <small>矩形内作为 Part A，其余 Mask 作为 Part B。</small>
+      <div class="rect-grid">
+        <label>X1<input id="splitX1" type="number" value="${asset.bbox.x1}" /></label>
+        <label>Y1<input id="splitY1" type="number" value="${asset.bbox.y1}" /></label>
+        <label>X2<input id="splitX2" type="number" value="${asset.bbox.x2}" /></label>
+        <label>Y2<input id="splitY2" type="number" value="${midY}" /></label>
+      </div>
+      <div class="split-labels">
+        <input id="insideLabel" placeholder="Part A 名称（可选）" />
+        <input id="outsideLabel" placeholder="Part B 名称（可选）" />
+      </div>
+      <button id="splitAssetBtn" class="secondary-btn">按矩形拆分</button>
+    </div>
+
     <div class="preview-actions">
       <a href="${base}${asset.image}" download>下载透明 PNG</a>
       <a href="${base}${asset.mask}" download>下载 Mask</a>
     </div>
+    <button id="deleteAssetBtn" class="danger-btn">删除这个素材</button>
   `;
 
   $("saveAssetBtn").addEventListener("click", () => saveAssetMetadata(manifest, asset));
+  $("deleteAssetBtn").addEventListener("click", () => deleteAsset(manifest, asset));
+  $("splitAssetBtn").addEventListener("click", () => splitAsset(manifest, asset));
 }
 
 async function saveAssetMetadata(manifest, asset) {
@@ -224,12 +291,105 @@ async function saveAssetMetadata(manifest, asset) {
     if (index >= 0) manifest.assets[index] = updated;
     currentManifest = manifest;
     renderAssets(manifest, updated.id);
+    refreshOverlay(manifest);
     message.textContent = `已保存：${updated.label} · ${updated.category}`;
   } catch (error) {
     message.textContent = `保存失败：${error.message}`;
     saveButton.disabled = false;
     saveButton.textContent = "保存素材信息";
   }
+}
+
+async function deleteAsset(manifest, asset) {
+  if (!window.confirm(`确定删除素材“${asset.label}”吗？`)) return;
+  message.textContent = `正在删除：${asset.label}…`;
+
+  try {
+    const response = await fetch(`/api/v1/scenes/${manifest.scene_id}/assets/${asset.id}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "删除失败");
+
+    selectedAssetIds.delete(asset.id);
+    applyManifest(data);
+    message.textContent = `已删除：${asset.label}`;
+  } catch (error) {
+    message.textContent = `删除失败：${error.message}`;
+  }
+}
+
+async function splitAsset(manifest, asset) {
+  const rect = {
+    x1: Number($("splitX1").value),
+    y1: Number($("splitY1").value),
+    x2: Number($("splitX2").value),
+    y2: Number($("splitY2").value),
+  };
+  const payload = {
+    rect,
+    inside_label: $("insideLabel").value.trim() || null,
+    outside_label: $("outsideLabel").value.trim() || null,
+  };
+
+  if (Object.values(rect).some((value) => !Number.isFinite(value))) {
+    message.textContent = "拆分坐标必须是有效数字。";
+    return;
+  }
+
+  const button = $("splitAssetBtn");
+  button.disabled = true;
+  button.textContent = "拆分中…";
+  message.textContent = `正在拆分：${asset.label}…`;
+
+  try {
+    const response = await fetch(`/api/v1/scenes/${manifest.scene_id}/assets/${asset.id}/split`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "拆分失败");
+
+    selectedAssetIds.delete(asset.id);
+    const preferred = data.assets[data.assets.length - 2]?.id || null;
+    applyManifest(data, preferred);
+    message.textContent = `已拆分：${asset.label} → 2 个素材`;
+  } catch (error) {
+    message.textContent = `拆分失败：${error.message}`;
+    button.disabled = false;
+    button.textContent = "按矩形拆分";
+  }
+}
+
+function applyManifest(manifest, selectedAssetId = null) {
+  currentManifest = manifest;
+  const validIds = new Set(manifest.assets.map((asset) => asset.id));
+  [...selectedAssetIds].forEach((id) => {
+    if (!validIds.has(id)) selectedAssetIds.delete(id);
+  });
+
+  renderAssets(manifest, selectedAssetId);
+  refreshOverlay(manifest);
+
+  manifestLink.href = `/workspace/${manifest.scene_id}/scene.json?v=${Date.now()}`;
+  manifestLink.classList.remove("hidden");
+  archiveLink.href = `/api/v1/scenes/${manifest.scene_id}/export.zip`;
+  archiveLink.classList.remove("hidden");
+}
+
+function refreshOverlay(manifest) {
+  if (!manifest?.preview_image) return;
+  scenePreview.src = `/workspace/${manifest.scene_id}/${manifest.preview_image}?v=${Date.now()}`;
+  scenePreview.style.display = "block";
+  viewerHint.style.display = "none";
+}
+
+function updateSelectionBar() {
+  const hasScene = Boolean(currentManifest && currentManifest.assets.length);
+  selectionBar.classList.toggle("hidden", !hasScene);
+  selectionCount.textContent = `已选 ${selectedAssetIds.size}`;
+  mergeSelectedBtn.disabled = selectedAssetIds.size < 2;
 }
 
 function escapeHtml(value) {
