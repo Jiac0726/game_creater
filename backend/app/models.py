@@ -85,3 +85,29 @@ class SemanticExpansion(BaseModel):
     groups: List[SemanticGroup] = Field(default_factory=list)
     detection_prompts: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+
+
+class SceneRecommendRequest(BaseModel):
+    keyword: str
+    max_results: int = 20
+    min_semantic_score: float = 0.65
+
+
+class MissingAssetRecommendation(BaseModel):
+    zh: str
+    en: str
+    group: str
+    group_label_zh: str
+    semantic_score: float
+    reason: str = "ontology_recommended_not_detected"
+
+
+class SceneRecommendations(BaseModel):
+    scene_id: str
+    keyword: str
+    matched_concept_label: Optional[str] = None
+    detected_labels: List[str] = Field(default_factory=list)
+    candidate_count: int = 0
+    matched_count: int = 0
+    coverage_ratio: float = 0.0
+    missing: List[MissingAssetRecommendation] = Field(default_factory=list)
