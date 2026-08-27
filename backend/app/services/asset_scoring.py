@@ -7,6 +7,45 @@ import numpy as np
 from app.models import BBox
 
 
+def score_from_components(
+    components: dict[str, float],
+    semantic_value: float | None = None,
+) -> tuple[float, dict[str, float]]:
+    """Combine normalized score components into a bounded Asset Score."""
+
+    normalized = dict(components)
+    confidence_score = min(1.0, max(0.0, float(normalized.get("confidence", 0.0))))
+    size_score = min(1.0, max(0.0, float(normalized.get("size", 0.0))))
+    fill_score = min(1.0, max(0.0, float(normalized.get("fill", 0.0))))
+    completeness_score = min(1.0, max(0.0, float(normalized.get("completeness", 0.0))))
+
+    normalized["confidence"] = round(confidence_score, 4)
+    normalized["size"] = round(size_score, 4)
+    normalized["fill"] = round(fill_score, 4)
+    normalized["completeness"] = round(completeness_score, 4)
+
+    if semantic_value is None:
+        score = (
+            0.45 * confidence_score
+            + 0.25 * size_score
+            + 0.15 * fill_score
+            + 0.15 * completeness_score
+        )
+        normalized.pop("semantic", None)
+    else:
+        semantic_score = min(1.0, max(0.0, float(semantic_value)))
+        normalized["semantic"] = round(semantic_score, 4)
+        score = (
+            0.35 * confidence_score
+            + 0.20 * size_score
+            + 0.12 * fill_score
+            + 0.13 * completeness_score
+            + 0.20 * semantic_score
+        )
+
+    return round(min(1.0, max(0.0, score)), 4), normalized
+
+
 def score_asset(
     mask: np.ndarray,
     confidence: float,
@@ -27,7 +66,6 @@ def score_asset(
     mask_pixels = int(normalized.sum())
     area_ratio = mask_pixels / scene_pixels
 
-    # Roughly 3% of the scene is already large enough to receive full size credit.
     size_score = min(1.0, math.sqrt(max(0.0, area_ratio) / 0.03)) if area_ratio else 0.0
 
     if isinstance(bbox, BBox):
@@ -57,24 +95,4 @@ def score_asset(
         "completeness": round(completeness_score, 4),
         "area_ratio": round(area_ratio, 6),
     }
-
-    if semantic_value is None:
-        score = (
-            0.45 * confidence_score
-            + 0.25 * size_score
-            + 0.15 * fill_score
-            + 0.15 * completeness_score
-        )
-    else:
-        semantic_score = min(1.0, max(0.0, float(semantic_value)))
-        components["semantic"] = round(semantic_score, 4)
-        score = (
-            0.35 * confidence_score
-            + 0.20 * size_score
-            + 0.12 * fill_score
-            + 0.13 * completeness_score
-            + 0.20 * semantic_score
-        )
-
-    score = min(1.0, max(0.0, score))
-    return round(score, 4), components
+    return score_from_components(components, semantic_value=semantic_value)
