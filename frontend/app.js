@@ -11,8 +11,10 @@ const health = $("health");
 const fileName = $("fileName");
 const viewerHint = $("viewerHint");
 const manifestLink = $("manifestLink");
+const archiveLink = $("archiveLink");
 
 let currentManifest = null;
+let localPreviewUrl = null;
 
 async function loadHealth() {
   health.classList.remove("ok", "bad");
@@ -49,9 +51,15 @@ async function loadHealth() {
 imageInput.addEventListener("change", () => {
   const file = imageInput.files?.[0];
   if (!file) return;
+
+  currentManifest = null;
+  manifestLink.classList.add("hidden");
+  archiveLink.classList.add("hidden");
   fileName.textContent = file.name;
-  const url = URL.createObjectURL(file);
-  scenePreview.src = url;
+
+  if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+  localPreviewUrl = URL.createObjectURL(file);
+  scenePreview.src = localPreviewUrl;
   scenePreview.style.display = "block";
   viewerHint.style.display = "none";
 });
@@ -69,17 +77,28 @@ analyzeBtn.addEventListener("click", async () => {
 
   analyzeBtn.disabled = true;
   analyzeBtn.textContent = "拆解中…";
-  message.textContent = "正在生成检测结果、Mask、透明 PNG 和 scene.json…";
+  message.textContent = "正在生成检测结果、Mask、透明 PNG、Overlay 和 scene.json…";
 
   try {
     const response = await fetch("/api/v1/scenes/analyze", { method: "POST", body: form });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "分析失败");
+
     currentManifest = data;
     renderAssets(data);
+
+    if (data.preview_image) {
+      scenePreview.src = `/workspace/${data.scene_id}/${data.preview_image}?v=${Date.now()}`;
+      scenePreview.style.display = "block";
+      viewerHint.style.display = "none";
+    }
+
     manifestLink.href = `/workspace/${data.scene_id}/scene.json`;
     manifestLink.classList.remove("hidden");
-    message.textContent = `完成：${data.assets.length} 个素材 · 模式 ${data.mode}`;
+    archiveLink.href = `/api/v1/scenes/${data.scene_id}/export.zip`;
+    archiveLink.classList.remove("hidden");
+
+    message.textContent = `完成：${data.assets.length} 个素材 · 已生成 Overlay · 模式 ${data.mode}`;
   } catch (error) {
     message.textContent = `失败：${error.message}`;
   } finally {
