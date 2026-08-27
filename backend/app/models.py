@@ -30,6 +30,20 @@ class AssetPatch(BaseModel):
     notes: Optional[str] = None
 
 
+class AssetMergeRequest(BaseModel):
+    asset_ids: List[str]
+    label: str = "merged_asset"
+    category: Optional[str] = None
+    notes: Optional[str] = None
+    keep_sources: bool = False
+
+
+class AssetSplitRequest(BaseModel):
+    rect: BBox
+    inside_label: Optional[str] = None
+    outside_label: Optional[str] = None
+
+
 class SceneManifest(BaseModel):
     scene_id: str
     source_image: str
@@ -39,3 +53,4 @@ class SceneManifest(BaseModel):
     prompts: List[str]
     assets: List[AssetRecord]
     preview_image: Optional[str] = None
+    source_file: Optional[str] = None
