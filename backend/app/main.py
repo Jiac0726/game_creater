@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import zipfile
@@ -12,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.models import (
+    AssetEdgeRefineRequest,
     AssetMergeRequest,
     AssetPatch,
     AssetPointSegmentRequest,
@@ -24,6 +26,8 @@ from app.models import (
     SemanticExpansion,
 )
 from app.services.asset_editor import AssetEditor
+from app.services.birefnet_sidecar import BiRefNetSidecarError
+from app.services.edge_refinement import EdgeRefinementService
 from app.services.pipeline import AssetSplitPipeline
 from app.services.scene_recommender import SceneRecommender
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
@@ -38,8 +42,9 @@ UPLOADS.mkdir(parents=True, exist_ok=True)
 EXPORTS.mkdir(parents=True, exist_ok=True)
 
 SCENE_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
+EDGE_REFINER_MODE = os.getenv("GAME_CREATER_EDGE_REFINER", "none").strip().lower()
 
-app = FastAPI(title="Game Creater", version="0.3.0-dev")
+app = FastAPI(title="Game Creater", version="0.4.0-dev")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -53,6 +58,14 @@ scene_store = SceneStore(WORKSPACE)
 asset_editor = AssetEditor(WORKSPACE)
 semantic_engine = SemanticEngine()
 scene_recommender = SceneRecommender()
+edge_refiner = EdgeRefinementService(WORKSPACE)
+
+
+def _edge_status() -> dict:
+    if EDGE_REFINER_MODE != "birefnet_sidecar":
+        return {"enabled": False, "mode": EDGE_REFINER_MODE, "ready": False}
+    status = edge_refiner.health()
+    return {"enabled": True, "mode": EDGE_REFINER_MODE, **status}
 
 
 @app.get("/api/health")
@@ -61,7 +74,7 @@ def health() -> dict:
     return {
         "ok": True,
         "mode": pipeline.mode,
-        "version": "0.3.0-dev",
+        "version": "0.4.0-dev",
         "model": model,
         "semantic": {
             "ready": True,
@@ -69,12 +82,21 @@ def health() -> dict:
             "concept_count": len(semantic_engine.concepts),
             "modifier_count": len(semantic_engine.modifiers),
         },
+        "edge_refiner": {
+            "enabled": EDGE_REFINER_MODE == "birefnet_sidecar",
+            "mode": EDGE_REFINER_MODE,
+        },
     }
 
 
 @app.get("/api/v1/models/status")
 def model_status() -> dict:
     return pipeline.health()
+
+
+@app.get("/api/v1/edge-refiner/status")
+def edge_refiner_status() -> dict:
+    return _edge_status()
 
 
 @app.get("/api/v1/semantic/catalog")
@@ -213,6 +235,33 @@ def point_segment_asset(
     except AssetNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Asset not found") from exc
     except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/scenes/{scene_id}/assets/{asset_id}/refine-edge",
+    response_model=AssetRecord,
+)
+def refine_asset_edge(
+    scene_id: str,
+    asset_id: str,
+    request: AssetEdgeRefineRequest,
+) -> AssetRecord:
+    _validate_scene_id(scene_id)
+    if EDGE_REFINER_MODE != "birefnet_sidecar":
+        raise HTTPException(
+            status_code=503,
+            detail="BiRefNet edge refinement is disabled. Set GAME_CREATER_EDGE_REFINER=birefnet_sidecar.",
+        )
+    try:
+        return edge_refiner.refine(scene_id, asset_id, radius=request.radius)
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except AssetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Asset not found") from exc
+    except BiRefNetSidecarError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
