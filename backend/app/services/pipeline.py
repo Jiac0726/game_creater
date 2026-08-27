@@ -8,7 +8,7 @@ from typing import Any, Iterable, List
 from uuid import uuid4
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from app.models import AssetRecord, BBox, SceneManifest
 from app.services.grounded_sam2_local import GroundedSam2LocalAdapter
@@ -23,6 +23,15 @@ class Detection:
 
 class AssetSplitPipeline:
     """Game asset splitting pipeline with a pluggable inference backend."""
+
+    _OVERLAY_COLORS = (
+        (74, 159, 245),
+        (255, 132, 94),
+        (125, 220, 153),
+        (205, 148, 255),
+        (255, 211, 92),
+        (94, 224, 219),
+    )
 
     def __init__(self, workspace: str | Path):
         self.workspace = Path(workspace)
@@ -60,8 +69,10 @@ class AssetSplitPipeline:
         project_dir = self.workspace / scene_id
         asset_dir = project_dir / "assets"
         mask_dir = project_dir / "masks"
+        preview_dir = project_dir / "preview"
         asset_dir.mkdir(parents=True, exist_ok=True)
         mask_dir.mkdir(parents=True, exist_ok=True)
+        preview_dir.mkdir(parents=True, exist_ok=True)
 
         if self.mode == "mock":
             detections = self._mock_detect(image.width, image.height, prompts)
@@ -98,6 +109,9 @@ class AssetSplitPipeline:
                 )
             )
 
+        preview_path = preview_dir / "overlay.png"
+        self._save_overlay(image, detections, masks, preview_path)
+
         manifest = SceneManifest(
             scene_id=scene_id,
             source_image=image_path.name,
@@ -106,6 +120,7 @@ class AssetSplitPipeline:
             mode=self.mode,
             prompts=prompts,
             assets=assets,
+            preview_image="preview/overlay.png",
         )
         (project_dir / "scene.json").write_text(
             json.dumps(manifest.model_dump(), ensure_ascii=False, indent=2),
@@ -158,6 +173,37 @@ class AssetSplitPipeline:
         if self._grounded_adapter is None:
             self._grounded_adapter = GroundedSam2LocalAdapter()
         return self._grounded_adapter
+
+    def _save_overlay(
+        self,
+        image: Image.Image,
+        detections: list[Detection],
+        masks: list[np.ndarray],
+        output_path: Path,
+    ) -> None:
+        rgba = np.asarray(image.convert("RGBA"), dtype=np.float32).copy()
+        height, width = rgba.shape[:2]
+
+        for index, mask in enumerate(masks):
+            normalized = np.asarray(mask, dtype=bool)
+            if normalized.shape != (height, width):
+                continue
+            color = np.asarray(self._OVERLAY_COLORS[index % len(self._OVERLAY_COLORS)], dtype=np.float32)
+            rgba[normalized, :3] = rgba[normalized, :3] * 0.62 + color * 0.38
+
+        overlay = Image.fromarray(np.clip(rgba, 0, 255).astype(np.uint8), mode="RGBA")
+        draw = ImageDraw.Draw(overlay)
+        line_width = max(2, min(width, height) // 300)
+
+        for index, detection in enumerate(detections):
+            color = self._OVERLAY_COLORS[index % len(self._OVERLAY_COLORS)]
+            x1, y1, x2, y2 = detection.bbox
+            draw.rectangle((x1, y1, x2, y2), outline=color + (255,), width=line_width)
+            label = f"{detection.label} {detection.confidence:.2f}"
+            text_y = y1 + 4 if y1 < 18 else y1 - 16
+            draw.text((x1 + 4, text_y), label, fill=color + (255,))
+
+        overlay.save(output_path)
 
     @staticmethod
     def _slug(value: str) -> str:
