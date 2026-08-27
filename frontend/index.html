@@ -6,6 +6,7 @@
   <title>Game Creater v0.3 dev</title>
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/semantic.css" />
+  <link rel="stylesheet" href="/point_prompt.css" />
 </head>
 <body>
   <main class="shell">
@@ -105,6 +106,35 @@
       </aside>
     </section>
 
+    <section class="card sam-panel">
+      <div class="sam-head">
+        <div>
+          <h2>SAM2 点击添加 / 修正 Mask</h2>
+          <p>先完成一次场景拆解。绿色正点表示“包含”，红色负点表示“排除”；右键可直接添加负点。</p>
+        </div>
+        <span id="samPointStatus" class="sam-point-status">未启用</span>
+      </div>
+      <div class="sam-controls">
+        <label>
+          <span>素材名称</span>
+          <input id="samLabelInput" placeholder="新建素材名称；精修时自动带入当前素材" />
+        </label>
+        <div class="sam-actions">
+          <button id="samNewBtn">新建素材</button>
+          <button id="samRefineBtn">精修当前素材</button>
+        </div>
+        <div class="sam-polarity">
+          <button id="samPositiveBtn" disabled>正点 +</button>
+          <button id="samNegativeBtn" disabled>负点 −</button>
+        </div>
+        <div class="sam-actions">
+          <button id="samClearBtn" disabled>清空点</button>
+          <button id="samRunBtn" disabled>生成 / 更新 Mask</button>
+          <button id="samCancelBtn" disabled>退出点选</button>
+        </div>
+      </div>
+    </section>
+
     <section class="card footerbar">
       <span id="message">先输入中文概念生成素材关键词，也可以直接上传图片并手动输入检测 Prompt。</span>
       <div class="footer-actions">
@@ -115,5 +145,6 @@
   </main>
   <script src="/app.js"></script>
   <script src="/semantic.js"></script>
+  <script src="/point_prompt.js"></script>
 </body>
 </html>
