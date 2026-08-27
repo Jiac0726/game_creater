@@ -12,6 +12,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from app.models import AssetRecord, BBox, SceneManifest
+from app.services.asset_scoring import score_asset
 from app.services.grounded_sam2_local import GroundedSam2LocalAdapter
 
 
@@ -97,6 +98,15 @@ class AssetSplitPipeline:
             stem = f"{slug}_{counters[slug]:03d}"
 
             x1, y1, x2, y2 = detection.bbox
+            bbox = BBox(x1=x1, y1=y1, x2=x2, y2=y2)
+            asset_score, score_components = score_asset(
+                mask=mask,
+                confidence=detection.confidence,
+                scene_width=image.width,
+                scene_height=image.height,
+                bbox=bbox,
+            )
+
             alpha = Image.fromarray((mask.astype(np.uint8) * 255), mode="L")
             rgba = image.copy()
             rgba.putalpha(alpha)
@@ -109,7 +119,9 @@ class AssetSplitPipeline:
                     id=f"asset_{len(assets)+1:04d}",
                     label=detection.label,
                     confidence=detection.confidence,
-                    bbox=BBox(x1=x1, y1=y1, x2=x2, y2=y2),
+                    asset_score=asset_score,
+                    score_components=score_components,
+                    bbox=bbox,
                     image=f"assets/{stem}.png",
                     mask=f"masks/{stem}.png",
                     source_position={"x": x1, "y": y1},
