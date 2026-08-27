@@ -1,0 +1,17 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+pydantic==2.11.7
+Pillow==11.3.0
+numpy<2
+torch>=2.5.0
+torchvision
+transformers>=4.45
+huggingface-hub>0.25
+accelerate
+timm
+scipy
+scikit-image
+kornia
+einops
+opencv-python
+safetensors
