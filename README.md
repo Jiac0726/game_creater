@@ -1,30 +1,82 @@
 # Game Creater
 
-本地优先的游戏素材 AI 生产工具。当前主链已经跑通：
+本地优先的游戏素材 AI 生产工具。当前已经形成三段式主链：
 
-> 场景图片 → 目标词 → GroundingDINO 检测 → SAM2/SAM2.1 分割 → 透明 PNG + Mask → 人工校正 → Asset Score → `scene.json` / ZIP
+```text
+中文场景概念
+→ 本地 Game Asset Ontology 语义联想
+→ GroundingDINO 英文检测 Prompt
+→ GroundingDINO + SAM2/SAM2.1 图片拆解
+→ 透明 PNG / Mask / Overlay
+→ 人工删除 / 合并 / 拆分 / 重命名
+→ Asset Score
+→ scene.json / ZIP
+```
 
-项目保留 **Mock 模式** 作为无 GPU / 无模型环境下的回归测试后端；真实本地推理通过 `grounded_sam2_local` 适配器接入。
+语义联想模块与 Mock 模式均可**完全离线运行**，不依赖 ChatGPT、OpenAI API 或其他在线大模型服务。
 
 ## 当前功能
 
+### v0.1 图片 AI 拆解
+
 - 上传 PNG / JPG / WEBP 场景图
-- 输入目标关键词，例如 `tree, rock, house, crate, grass`
-- Mock 模式完整验证产品链路
-- 本地 GroundingDINO + SAM2/SAM2.1 真实检测与分割适配器
-- 自动检查模型依赖、权重和设备状态
-- 导出透明 RGBA PNG 与单资产 Mask
+- GroundingDINO 开放词汇目标检测
+- SAM2 / SAM2.1 Mask 分割
+- Mock 后端用于无 GPU 回归测试
+- 自动检查 torch / CUDA / 模型权重状态
+- 导出透明 RGBA PNG 和单资产 Mask
+- 自动生成 Mask + BBox Overlay
 - 自动生成 `scene.json`
-- 自动生成 Mask + BBox 场景 Overlay
-- 保留原始源图，支持后续无模型人工编辑
-- 素材名称、分类、备注编辑并持久化
-- 删除错误素材并自动重建 Overlay
-- 多选素材合并为一个新资产
-- 用矩形区域把一个 Mask 拆成两个资产
-- Scene Viewer 直接鼠标拖拽矩形，自动换算原图坐标
-- Asset Score v0：结合检测置信度、面积、Mask 填充度与贴边完整度评分
-- 一键打包下载当前场景 ZIP
-- GitHub Actions 自动测试后端主链并检查前端 JavaScript 语法
+- 一键导出场景 ZIP
+
+### v0.2 人工校正与素材管理
+
+- 保留原始源图，编辑后无需重新跑 AI
+- 修改素材名称、分类、备注并持久化
+- 删除错误素材
+- 多选 Mask 合并成一个新资产
+- 矩形拆分一个 Mask 为两个资产
+- Scene Viewer 鼠标拖拽矩形并自动换算原图坐标
+- 编辑后自动重建透明 PNG / Mask / Overlay / JSON
+- Asset Score v0：综合置信度、面积、Mask 填充度、边界完整度
+
+### v0.3 本地游戏素材语义联想
+
+- 自建 `Game Asset Ontology`
+- 中文场景概念匹配
+- 场景修饰词匹配，例如：废弃、魔法、赛博朋克、中世纪、雨天、雪地
+- 按建筑 / 结构 / 道具 / 植被 / 地形 / 载具 / 生物 / 效果 / 材质分组
+- 状态 + 游戏资产组合词生成
+- 自动去重、排序和数量限制
+- 自动生成 GroundingDINO 更适合使用的英文对象 Prompt
+- Web UI 展示语义关键词树
+- 一键“应用到拆图”
+- 已上传图片时可“一键联想并拆图”
+- 概念和修饰词目录 API
+
+当前首批本体覆盖：
+
+```text
+森林
+地铁站
+工厂
+海边渔村
+洞穴
+城堡
+酒馆
+城市小巷
+```
+
+并可和修饰词组合，例如：
+
+```text
+废弃地铁站
+魔法森林
+赛博朋克城市小巷
+中世纪城堡
+雨天城市小巷
+雪地森林
+```
 
 ## 项目结构
 
@@ -39,14 +91,17 @@ game_creater/
 │  │     ├─ grounded_sam2_local.py
 │  │     ├─ scene_store.py
 │  │     ├─ asset_editor.py
-│  │     └─ asset_scoring.py
+│  │     ├─ asset_scoring.py
+│  │     └─ semantic_engine.py
 │  ├─ tests/
 │  │  ├─ test_mock_pipeline.py
 │  │  ├─ test_scene_store.py
 │  │  ├─ test_asset_editor.py
-│  │  └─ test_asset_scoring.py
-│  ├─ requirements.txt
-│  └─ requirements-dev.txt
+│  │  ├─ test_asset_scoring.py
+│  │  └─ test_semantic_engine.py
+│  └─ requirements*.txt
+├─ data/
+│  └─ game_asset_ontology.json
 ├─ config/
 │  └─ grounded_sam2.env.example
 ├─ scripts/
@@ -54,13 +109,15 @@ game_creater/
 ├─ frontend/
 │  ├─ index.html
 │  ├─ app.js
-│  └─ style.css
-├─ model_weights/      # 本地模型权重，不提交 Git
-├─ workspace/          # 运行时输出，不提交 Git
+│  ├─ semantic.js
+│  ├─ style.css
+│  └─ semantic.css
+├─ model_weights/      # 不提交 Git
+├─ workspace/          # 运行时数据，不提交 Git
 └─ README.md
 ```
 
-## 1. Mock 模式验证产品链
+## 1. 最快启动：Mock 模式
 
 Windows / PowerShell：
 
@@ -84,57 +141,117 @@ uvicorn app.main:app --reload --port 8000
 http://127.0.0.1:8000
 ```
 
-Mock 不做真实 AI 识别，但会真实执行：
+Mock 不做真实 AI 识别，但语义联想和完整素材处理链都是真实逻辑：
 
 ```text
-图片读取
-→ Mask 生成
-→ RGBA Alpha 合成
-→ 单资产裁剪
-→ PNG / Mask 导出
+中文关键词联想
+→ Prompt 生成
+→ Mock Detection / Mask
+→ RGBA PNG
 → Asset Score
-→ Overlay 生成
-→ scene.json 生成
-→ 删除 / 合并 / 拆分 / 元数据编辑
-→ ZIP 打包
-→ Web 前端展示
+→ Overlay
+→ scene.json
+→ 人工编辑
+→ ZIP
 ```
 
-## 2. Grounded-SAM2 本地模式
+## 2. 使用本地语义联想
 
-真实模式使用：
+页面顶部输入：
 
 ```text
-GroundingDINO
-    ↓ bbox
-SAM2 / SAM2.1
-    ↓ mask
-Game Creater pipeline
-    ↓
-RGBA PNG / Mask / Overlay / scene.json
-    ↓
-Asset Editor 人工校正
+废弃地铁站
 ```
 
-### 推荐环境
+点击：
 
-- WSL2 Ubuntu 或 Linux
+```text
+生成关键词组
+```
+
+系统会返回类似：
+
+```text
+结构：站台 / 轨道 / 隧道 / 楼梯 / 扶梯 / 通风井
+道具：闸机 / 售票机 / 长椅 / 垃圾桶 / 路障 / 电缆
+效果：灰尘 / 滴水 / 电火花 / 地下薄雾
+状态变体：破损站台 / 生锈闸机 / ...
+```
+
+并自动准备英文检测 Prompt，例如：
+
+```text
+subway platform,
+rail track,
+subway tunnel,
+ticket gate,
+ticket machine,
+station bench,
+trash can,
+barrier,
+cable
+```
+
+操作：
+
+- `应用到拆图`：写入下方 GroundingDINO Prompt 输入框
+- `联想并拆图`：已上传图片时直接开始图片拆解
+- 点击单个语义词：可手动添加/移除检测 Prompt
+
+展开深度：
+
+```text
+1：基础本体素材
+2：少量状态组合，偏检测稳定
+3：更多状态组合，偏素材策划/联想
+```
+
+### 语义 API
+
+```text
+GET  /api/v1/semantic/catalog
+POST /api/v1/semantic/expand
+```
+
+请求示例：
+
+```json
+{
+  "keyword": "魔法森林",
+  "depth": 2,
+  "max_per_group": 12
+}
+```
+
+主要响应字段：
+
+```json
+{
+  "matched_concept": "forest",
+  "matched_concept_label": "森林",
+  "modifiers": ["魔法"],
+  "groups": [],
+  "detection_prompts": []
+}
+```
+
+## 3. GroundingDINO + SAM2 本地真实模式
+
+推荐环境：
+
+- WSL2 Ubuntu / Linux
 - Python 3.10+
 - PyTorch 2.3.1+
-- 与 PyTorch 匹配的 CUDA Toolkit
-- NVIDIA GPU 推荐
+- 匹配的 CUDA 环境
+- NVIDIA GPU
 
-Windows 原生仍可运行前端和 Mock 后端；Grounded-SAM2 重模型层推荐放在 WSL2 / Linux。
-
-### 安装
-
-先根据显卡/CUDA，从 PyTorch 官方安装匹配的 `torch` 和 `torchvision`，然后在仓库根目录执行：
+先按显卡环境安装 PyTorch，然后执行：
 
 ```bash
 bash scripts/setup_grounded_sam2_wsl.sh
 ```
 
-### 启动真实模式
+启动示例：
 
 ```bash
 export GAME_CREATER_MODE=grounded_sam2_local
@@ -143,48 +260,33 @@ export GROUNDING_DINO_CONFIG="$HOME/.local/share/game_creater/Grounded-SAM-2/gro
 export GROUNDING_DINO_CHECKPOINT="$HOME/.local/share/game_creater/Grounded-SAM-2/gdino_checkpoints/groundingdino_swint_ogc.pth"
 export SAM2_MODEL_CONFIG="configs/sam2.1/sam2.1_hiera_l.yaml"
 export SAM2_CHECKPOINT="$HOME/.local/share/game_creater/Grounded-SAM-2/checkpoints/sam2.1_hiera_large.pt"
-export GAME_CREATER_BOX_THRESHOLD=0.35
-export GAME_CREATER_TEXT_THRESHOLD=0.25
 
 cd backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-环境变量示例见 `config/grounded_sam2.env.example`。
+环境变量参考 `config/grounded_sam2.env.example`。
 
-## 3. 人工校正
-
-修改素材元数据：
+健康检查：
 
 ```text
-PATCH /api/v1/scenes/<scene_id>/assets/<asset_id>
+GET /api/health
+GET /api/v1/models/status
 ```
 
-删除错误素材：
+## 4. 人工校正 API
 
 ```text
+PATCH  /api/v1/scenes/<scene_id>/assets/<asset_id>
 DELETE /api/v1/scenes/<scene_id>/assets/<asset_id>
+POST   /api/v1/scenes/<scene_id>/assets/merge
+POST   /api/v1/scenes/<scene_id>/assets/<asset_id>/split
+GET    /api/v1/scenes/<scene_id>/export.zip
 ```
 
-合并多个素材：
+## 5. Asset Score v0
 
-```text
-POST /api/v1/scenes/<scene_id>/assets/merge
-```
-
-矩形拆分一个 Mask：
-
-```text
-POST /api/v1/scenes/<scene_id>/assets/<asset_id>/split
-```
-
-前端支持直接在 Scene Viewer 拖拽矩形；显示坐标会自动映射回原图坐标并填入拆分参数。
-
-## 4. Asset Score v0
-
-当前评分范围为 `0–1`，暂时只做排序与筛选基础，不会自动删除素材。
-
-组成：
+当前只作为排序/过滤基础，不会自动删除素材。
 
 ```text
 45% 检测置信度
@@ -193,24 +295,16 @@ POST /api/v1/scenes/<scene_id>/assets/<asset_id>/split
 15% 边界完整度
 ```
 
-`scene.json` 中保存：
+未来会加入：
 
-```json
-{
-  "asset_score": 0.78,
-  "score_components": {
-    "confidence": 0.80,
-    "size": 1.0,
-    "fill": 0.92,
-    "completeness": 1.0,
-    "area_ratio": 0.0512
-  }
-}
+```text
+Game Asset Ontology 语义价值分
+重复度
+遮挡率
+素材独立性
 ```
 
-后续 Game Asset Ontology 会再加入“是否具有游戏素材语义价值”的评分维度。
-
-## 5. 输出结构
+## 6. 输出结构
 
 ```text
 workspace/<scene_id>/
@@ -223,45 +317,32 @@ workspace/<scene_id>/
 └─ scene.json
 ```
 
-完整场景：
+## 7. 测试与 CI
 
-```text
-GET /api/v1/scenes/<scene_id>/export.zip
-```
-
-## 6. 输入 Prompt
-
-GroundingDINO 更适合英文对象词，例如：
-
-```text
-tree, rock, house, crate, grass, barrel, fence
-```
-
-后续语义联想模块负责把中文素材概念自动映射成检测 Prompt。
-
-## 7. 测试
+本地：
 
 ```bash
 cd backend
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
 node --check ../frontend/app.js
+node --check ../frontend/semantic.js
 ```
 
-CI 当前验证：
+GitHub Actions 当前验证：
 
 ```text
-输入图片
-→ Detection
-→ Mask
+语义本体加载
+→ 中文概念匹配
+→ 修饰词与状态变体
+→ 英文 Prompt 生成
+→ Detection / Mask
 → RGBA PNG
 → Asset Score
 → Overlay
 → scene.json
 → 元数据持久化
-→ 删除素材
-→ 合并 Mask
-→ 矩形拆分 Mask
+→ 删除 / 合并 / 拆分
 → ZIP
 → 前端 JavaScript 语法
 ```
@@ -270,34 +351,34 @@ CI 当前验证：
 
 ### v0.1
 
-- [x] 上传场景图
-- [x] Asset 数据结构
-- [x] 透明 PNG / Mask / JSON 导出
-- [x] 最小 Web UI
+- [x] 图片上传和 Detection / Mask 主链
 - [x] GroundingDINO + SAM2/SAM2.1 本地适配层
+- [x] PNG / Mask / Overlay / JSON / ZIP
 - [x] 模型健康检查
-- [x] Mock 回归测试 + CI
-- [x] Scene Viewer 显示 bbox / Mask Overlay
-- [x] 一键 ZIP 导出
-- [ ] 目标 WSL + NVIDIA CUDA 环境真实图片实机验证
+- [x] Mock CI
+- [ ] 目标 WSL + NVIDIA CUDA 实机真实图片验证
 
 ### v0.2
 
-- [x] 素材重命名、分类、备注
-- [x] 删除错误素材
-- [x] 多素材 Mask 合并
+- [x] 素材重命名 / 分类 / 备注
+- [x] 删除素材
+- [x] 多 Mask 合并
 - [x] 矩形拆分 Mask
-- [x] Scene Viewer 鼠标拖拽框选拆分区域
-- [x] 编辑后自动重建透明 PNG / Mask / Overlay / JSON
+- [x] Scene Viewer 鼠标拖拽拆分
 - [x] Asset Score v0
 - [ ] SAM 点击添加 / 修正 Mask
-- [ ] 多实例过滤与去重
+- [ ] 多实例过滤和去重
 
 ### v0.3
 
-- [ ] 本地游戏素材语义联想引擎
-- [ ] Game Asset Ontology
-- [ ] 中文关键词 → 检测 Prompt
+- [x] 本地 Game Asset Ontology
+- [x] 本地中文语义联想引擎
+- [x] 修饰词 + 素材状态组合
+- [x] 中文关键词 → GroundingDINO Prompt
+- [x] Web 关键词树
+- [x] 一键应用 Prompt / 联想并拆图
+- [ ] 扩充本体词库
+- [ ] Embedding 候选召回层
 - [ ] 图片反向推荐缺失素材
 
 ### 后续
@@ -310,4 +391,4 @@ CI 当前验证：
 
 ## 设计原则
 
-模型不是核心数据结构。检测器、分割器和补全模型通过适配层接入，核心业务只依赖统一的 `Detection / Mask / Asset / SceneManifest` 数据模型；人工校正与评分层也完全独立于推理模型。
+模型不是核心数据结构。检测器、分割器、语义模型和补全模型都通过独立层接入；素材管理核心只依赖统一的 `Detection / Mask / Asset / SceneManifest` 数据模型。
