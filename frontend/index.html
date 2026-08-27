@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Game Creater v0.1</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">GAME ASSET FACTORY</p>
+        <h1>游戏素材 AI 拆解器 <span>v0.1</span></h1>
+      </div>
+      <div id="health" class="status">连接中…</div>
+    </header>
+
+    <section class="toolbar card">
+      <label class="upload">
+        <strong>场景图片</strong>
+        <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" />
+        <span id="fileName">选择 PNG / JPG / WEBP</span>
+      </label>
+      <label>
+        <strong>目标关键词</strong>
+        <input id="promptInput" value="tree, rock, house, crate, grass" />
+      </label>
+      <button id="analyzeBtn">AI 拆解</button>
+    </section>
+
+    <section class="workspace">
+      <aside class="card panel">
+        <div class="panel-title">Asset Tree</div>
+        <div id="assetList" class="asset-list empty">尚未分析场景</div>
+      </aside>
+
+      <section class="card panel viewer-panel">
+        <div class="panel-title">Scene Viewer</div>
+        <div class="viewer">
+          <img id="scenePreview" alt="场景预览" />
+          <div id="viewerHint">上传图片后在这里预览</div>
+        </div>
+      </section>
+
+      <aside class="card panel">
+        <div class="panel-title">Asset Preview</div>
+        <div id="assetPreview" class="asset-preview empty">点击左侧素材查看</div>
+      </aside>
+    </section>
+
+    <section class="card footerbar">
+      <span id="message">Mock 模式用于先验证上传 → 拆解 → 导出的完整流程。</span>
+      <a id="manifestLink" class="hidden" target="_blank">打开 scene.json</a>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
