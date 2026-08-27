@@ -104,7 +104,7 @@ class SemanticEngine:
                     )
 
         if depth >= 2 and modifier_keys:
-            self._add_state_variants(grouped, modifier_keys, max_per_group)
+            self._add_state_variants(grouped, modifier_keys, max_per_group, depth)
 
         groups: list[SemanticGroup] = []
         for group_key in self._ordered_group_keys(grouped):
@@ -196,9 +196,17 @@ class SemanticEngine:
         grouped: dict[str, dict[str, SemanticKeyword]],
         modifier_keys: list[str],
         max_per_group: int,
+        depth: int,
     ) -> None:
+        # Depth 2 deliberately stays conservative for detector-friendly output;
+        # depth 3 explores more art-production variants for brainstorming.
+        state_limit = 1 if depth == 2 else None
+        base_limit = 2 if depth == 2 else 4
+
         for modifier_key in modifier_keys:
             states = self.modifiers[modifier_key].get("states", [])
+            if state_limit is not None:
+                states = states[:state_limit]
             if not states:
                 continue
             for group_key in list(grouped.keys()):
@@ -208,7 +216,7 @@ class SemanticEngine:
                     item
                     for item in grouped[group_key].values()
                     if not item.source.startswith("variant:")
-                ][: max(1, min(4, max_per_group // 2))]
+                ][: max(1, min(base_limit, max_per_group // 2))]
                 for state in states:
                     for base in base_items:
                         variant = SemanticKeyword(
