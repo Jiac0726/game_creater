@@ -36,7 +36,7 @@
       </aside>
 
       <section class="card panel viewer-panel">
-        <div class="panel-title">Scene Viewer</div>
+        <div class="panel-title">Scene Viewer · Mask / BBox Overlay</div>
         <div class="viewer">
           <img id="scenePreview" alt="场景预览" />
           <div id="viewerHint">上传图片后在这里预览</div>
@@ -51,7 +51,10 @@
 
     <section class="card footerbar">
       <span id="message">Mock 模式用于先验证上传 → 拆解 → 导出的完整流程。</span>
-      <a id="manifestLink" class="hidden" target="_blank">打开 scene.json</a>
+      <div class="footer-actions">
+        <a id="manifestLink" class="hidden" target="_blank">打开 scene.json</a>
+        <a id="archiveLink" class="hidden">下载全部 ZIP</a>
+      </div>
     </section>
   </main>
   <script src="/app.js"></script>
