@@ -16,6 +16,8 @@ class AssetRecord(BaseModel):
     label: str
     category: str = "uncategorized"
     confidence: float = 0.0
+    asset_score: float = 0.0
+    score_components: dict[str, float] = Field(default_factory=dict)
     bbox: BBox
     image: str
     mask: str
