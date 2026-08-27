@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Game Creater v0.1</title>
+  <title>Game Creater v0.2 dev</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -11,7 +11,7 @@
     <header>
       <div>
         <p class="eyebrow">GAME ASSET FACTORY</p>
-        <h1>游戏素材 AI 拆解器 <span>v0.1</span></h1>
+        <h1>游戏素材 AI 拆解器 <span>v0.2 dev</span></h1>
       </div>
       <div id="health" class="status">连接中…</div>
     </header>
@@ -32,6 +32,10 @@
     <section class="workspace">
       <aside class="card panel">
         <div class="panel-title">Asset Tree</div>
+        <div id="selectionBar" class="selection-bar hidden">
+          <span id="selectionCount">已选 0</span>
+          <button id="mergeSelectedBtn" disabled>合并选中</button>
+        </div>
         <div id="assetList" class="asset-list empty">尚未分析场景</div>
       </aside>
 
@@ -44,13 +48,13 @@
       </section>
 
       <aside class="card panel">
-        <div class="panel-title">Asset Preview</div>
+        <div class="panel-title">Asset Preview / Editor</div>
         <div id="assetPreview" class="asset-preview empty">点击左侧素材查看</div>
       </aside>
     </section>
 
     <section class="card footerbar">
-      <span id="message">Mock 模式用于先验证上传 → 拆解 → 导出的完整流程。</span>
+      <span id="message">上传图片后可 AI 拆解，并手动删除、合并或矩形拆分 Mask。</span>
       <div class="footer-actions">
         <a id="manifestLink" class="hidden" target="_blank">打开 scene.json</a>
         <a id="archiveLink" class="hidden">下载全部 ZIP</a>
