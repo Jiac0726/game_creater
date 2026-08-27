@@ -17,10 +17,13 @@ from app.models import (
     AssetRecord,
     AssetSplitRequest,
     SceneManifest,
+    SemanticExpandRequest,
+    SemanticExpansion,
 )
 from app.services.asset_editor import AssetEditor
 from app.services.pipeline import AssetSplitPipeline
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
+from app.services.semantic_engine import SemanticEngine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = REPO_ROOT / "workspace"
@@ -32,7 +35,7 @@ EXPORTS.mkdir(parents=True, exist_ok=True)
 
 SCENE_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 
-app = FastAPI(title="Game Creater", version="0.2.0-dev")
+app = FastAPI(title="Game Creater", version="0.3.0-dev")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,6 +47,7 @@ app.add_middleware(
 pipeline = AssetSplitPipeline(WORKSPACE)
 scene_store = SceneStore(WORKSPACE)
 asset_editor = AssetEditor(WORKSPACE)
+semantic_engine = SemanticEngine()
 
 
 @app.get("/api/health")
@@ -52,14 +56,37 @@ def health() -> dict:
     return {
         "ok": True,
         "mode": pipeline.mode,
-        "version": "0.2.0-dev",
+        "version": "0.3.0-dev",
         "model": model,
+        "semantic": {
+            "ready": True,
+            "offline": True,
+            "concept_count": len(semantic_engine.concepts),
+            "modifier_count": len(semantic_engine.modifiers),
+        },
     }
 
 
 @app.get("/api/v1/models/status")
 def model_status() -> dict:
     return pipeline.health()
+
+
+@app.get("/api/v1/semantic/catalog")
+def semantic_catalog() -> dict:
+    return semantic_engine.catalog()
+
+
+@app.post("/api/v1/semantic/expand", response_model=SemanticExpansion)
+def semantic_expand(request: SemanticExpandRequest) -> SemanticExpansion:
+    try:
+        return semantic_engine.expand(
+            request.keyword,
+            depth=request.depth,
+            max_per_group=request.max_per_group,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/scenes/analyze", response_model=SceneManifest)
