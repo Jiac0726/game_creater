@@ -7,7 +7,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #172033 0, #0a0d12 40%); }
-button, input { font: inherit; }
+button, input, select, textarea { font: inherit; }
 a { color: #9bd2ff; text-decoration: none; }
 
 .shell { max-width: 1500px; margin: 0 auto; padding: 28px; }
@@ -34,10 +34,11 @@ h1 span { font-size: 14px; font-weight: 600; color: #7f8ea3; }
 .panel-title { padding: 13px 15px; border-bottom: 1px solid #202938; color: #93a0b4; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .empty { color: #657287; display: grid; place-items: center; text-align: center; }
 .asset-list { padding: 10px; }
-.asset-row { width: 100%; display: flex; justify-content: space-between; gap: 10px; border: 1px solid transparent; background: transparent; color: #cbd5e4; padding: 10px 11px; border-radius: 9px; cursor: pointer; text-align: left; }
+.asset-row { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid transparent; background: transparent; color: #cbd5e4; padding: 10px 11px; border-radius: 9px; cursor: pointer; text-align: left; }
 .asset-row:hover { background: #151d29; }
 .asset-row.selected { background: #18283b; border-color: #2d5b86; color: #fff; }
-.asset-row small { color: #748398; }
+.asset-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-row small { color: #748398; white-space: nowrap; font-size: 10px; }
 
 .viewer-panel { min-width: 0; }
 .viewer { height: calc(100% - 43px); min-height: 545px; display: grid; place-items: center; padding: 22px; background-image: linear-gradient(45deg,#111720 25%,transparent 25%),linear-gradient(-45deg,#111720 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#111720 75%),linear-gradient(-45deg,transparent 75%,#111720 75%); background-size: 24px 24px; background-position: 0 0,0 12px,12px -12px,-12px 0; }
@@ -45,9 +46,16 @@ h1 span { font-size: 14px; font-weight: 600; color: #7f8ea3; }
 #viewerHint { color: #59677c; }
 
 .asset-preview { min-height: 545px; padding: 16px; align-content: center; }
-.asset-preview img { width: 100%; max-height: 330px; object-fit: contain; border-radius: 10px; background: repeating-conic-gradient(#171e29 0 25%, #101620 0 50%) 50% / 18px 18px; }
+.asset-preview img { width: 100%; max-height: 280px; object-fit: contain; border-radius: 10px; background: repeating-conic-gradient(#171e29 0 25%, #101620 0 50%) 50% / 18px 18px; }
 .meta { display: grid; gap: 6px; margin-top: 14px; color: #7e8ca0; font-size: 12px; }
 .meta strong { color: #f0f4fa; font-size: 15px; }
+.asset-editor { display: grid; gap: 10px; margin-top: 15px; padding-top: 14px; border-top: 1px solid #202938; }
+.asset-editor label { display: grid; gap: 6px; color: #8492a6; font-size: 11px; }
+.asset-editor input, .asset-editor select, .asset-editor textarea { width: 100%; border: 1px solid #2a3547; border-radius: 8px; background: #0b1018; color: #edf4ff; padding: 8px 9px; outline: none; resize: vertical; }
+.asset-editor input:focus, .asset-editor select:focus, .asset-editor textarea:focus { border-color: #427fb8; }
+.save-asset-btn { border: 1px solid #2d5b86; border-radius: 8px; background: #18314a; color: #cce7ff; padding: 9px 10px; cursor: pointer; font-weight: 700; }
+.save-asset-btn:hover { background: #1d3b5a; }
+.save-asset-btn:disabled { opacity: .55; cursor: wait; }
 .preview-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 .preview-actions a { text-align: center; padding: 9px 8px; border: 1px solid #30415a; border-radius: 8px; background: #111925; font-size: 12px; }
 
