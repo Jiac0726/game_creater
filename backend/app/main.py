@@ -11,7 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.models import AssetPatch, AssetRecord, SceneManifest
+from app.models import (
+    AssetMergeRequest,
+    AssetPatch,
+    AssetRecord,
+    AssetSplitRequest,
+    SceneManifest,
+)
+from app.services.asset_editor import AssetEditor
 from app.services.pipeline import AssetSplitPipeline
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
 
@@ -36,6 +43,7 @@ app.add_middleware(
 
 pipeline = AssetSplitPipeline(WORKSPACE)
 scene_store = SceneStore(WORKSPACE)
+asset_editor = AssetEditor(WORKSPACE)
 
 
 @app.get("/api/health")
@@ -89,6 +97,58 @@ def patch_asset(scene_id: str, asset_id: str, patch: AssetPatch) -> AssetRecord:
     _validate_scene_id(scene_id)
     try:
         return scene_store.patch_asset(scene_id, asset_id, patch)
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except AssetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete(
+    "/api/v1/scenes/{scene_id}/assets/{asset_id}",
+    response_model=SceneManifest,
+)
+def delete_asset(scene_id: str, asset_id: str) -> SceneManifest:
+    _validate_scene_id(scene_id)
+    try:
+        return asset_editor.delete(scene_id, asset_id)
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except AssetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/scenes/{scene_id}/assets/merge",
+    response_model=SceneManifest,
+)
+def merge_assets(scene_id: str, request: AssetMergeRequest) -> SceneManifest:
+    _validate_scene_id(scene_id)
+    try:
+        return asset_editor.merge(scene_id, request)
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except AssetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/scenes/{scene_id}/assets/{asset_id}/split",
+    response_model=SceneManifest,
+)
+def split_asset(
+    scene_id: str,
+    asset_id: str,
+    request: AssetSplitRequest,
+) -> SceneManifest:
+    _validate_scene_id(scene_id)
+    try:
+        return asset_editor.split(scene_id, asset_id, request)
     except SceneNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Scene not found") from exc
     except AssetNotFoundError as exc:
