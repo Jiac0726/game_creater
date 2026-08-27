@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from app.models import (
     AssetMergeRequest,
     AssetPatch,
+    AssetPointSegmentRequest,
     AssetRecord,
     AssetSplitRequest,
     SceneManifest,
@@ -140,6 +141,79 @@ def recommend_missing_assets(
         )
     except SceneNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/scenes/{scene_id}/assets/point-segment",
+    response_model=SceneManifest,
+)
+def point_segment_asset(
+    scene_id: str,
+    request: AssetPointSegmentRequest,
+) -> SceneManifest:
+    """Create or refine one asset from positive/negative SAM2 point prompts."""
+    _validate_scene_id(scene_id)
+    if pipeline.mode not in {"grounded_sam2", "grounded_sam2_local"}:
+        raise HTTPException(
+            status_code=503,
+            detail="Interactive SAM point segmentation requires grounded_sam2_local mode",
+        )
+
+    try:
+        manifest = scene_store.load(scene_id)
+        if not manifest.source_file:
+            raise ValueError("Scene has no retained source image")
+        source_path = WORKSPACE / scene_id / manifest.source_file
+        if not source_path.is_file():
+            raise ValueError("Retained source image is missing")
+        if not request.points:
+            raise ValueError("At least one SAM point prompt is required")
+
+        existing = None
+        box = None
+        if request.asset_id:
+            existing = next(
+                (asset for asset in manifest.assets if asset.id == request.asset_id),
+                None,
+            )
+            if existing is None:
+                raise AssetNotFoundError(request.asset_id)
+            if request.use_asset_box:
+                box = (
+                    existing.bbox.x1,
+                    existing.bbox.y1,
+                    existing.bbox.x2,
+                    existing.bbox.y2,
+                )
+
+        label = (request.label or (existing.label if existing else "asset")).strip()
+        points = [(point.x, point.y) for point in request.points]
+        point_labels = [1 if point.positive else 0 for point in request.points]
+        mask, sam_score = pipeline._get_grounded_adapter().segment_points(
+            source_path,
+            points,
+            point_labels,
+            box=box,
+        )
+        confidence = min(1.0, max(0.0, float(sam_score)))
+
+        return asset_editor.upsert_from_mask(
+            scene_id,
+            mask,
+            label=label,
+            category=request.category,
+            notes=request.notes,
+            confidence=confidence,
+            replace_asset_id=request.asset_id,
+        )
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except AssetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Asset not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
