@@ -32,3 +32,4 @@ class SceneManifest(BaseModel):
     mode: str
     prompts: List[str]
     assets: List[AssetRecord]
+    preview_image: Optional[str] = None
