@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from app.services.detection_filter import deduplicate_detections
+
 
 @dataclass
 class AdapterDetection:
@@ -21,6 +23,9 @@ class GroundedSam2LocalAdapter:
 
     Heavy dependencies are imported only when this adapter is selected, so the
     core FastAPI application can still run in mock mode without torch/CUDA.
+    GroundingDINO duplicate boxes are suppressed before SAM2 so one physical
+    object does not consume multiple segmentation passes or produce duplicate
+    game assets.
     """
 
     def __init__(self) -> None:
@@ -34,6 +39,10 @@ class GroundedSam2LocalAdapter:
         self.requested_device = os.getenv("GAME_CREATER_DEVICE", "auto").strip().lower()
         self.box_threshold = float(os.getenv("GAME_CREATER_BOX_THRESHOLD", "0.35"))
         self.text_threshold = float(os.getenv("GAME_CREATER_TEXT_THRESHOLD", "0.25"))
+        self.dedupe_iou = float(os.getenv("GAME_CREATER_DEDUPE_IOU", "0.65"))
+        self.cross_label_dedupe_iou = float(
+            os.getenv("GAME_CREATER_CROSS_LABEL_DEDUPE_IOU", "0.92")
+        )
 
         self._torch: Any | None = None
         self._box_convert: Any | None = None
@@ -75,6 +84,8 @@ class GroundedSam2LocalAdapter:
             "cuda_available": cuda_available,
             "box_threshold": self.box_threshold,
             "text_threshold": self.text_threshold,
+            "dedupe_iou": self.dedupe_iou,
+            "cross_label_dedupe_iou": self.cross_label_dedupe_iou,
             "checks": checks,
         }
 
@@ -111,16 +122,48 @@ class GroundedSam2LocalAdapter:
 
         height, width = image_source.shape[:2]
         scale = self._torch.tensor([width, height, width, height], dtype=boxes.dtype)
-        input_boxes = self._box_convert(
+        converted_boxes = self._box_convert(
             boxes=boxes.detach().cpu() * scale,
             in_fmt="cxcywh",
             out_fmt="xyxy",
         ).numpy()
 
+        score_values = (
+            confidences.detach().cpu().tolist()
+            if hasattr(confidences, "detach")
+            else list(confidences)
+        )
+        label_values = list(labels)
+
+        valid_boxes: list[tuple[int, int, int, int]] = []
+        valid_scores: list[float] = []
+        valid_labels: list[str] = []
+        for box, score, label in zip(converted_boxes, score_values, label_values):
+            x1, y1, x2, y2 = self._clip_box(box, width, height)
+            if x2 <= x1 or y2 <= y1:
+                continue
+            valid_boxes.append((x1, y1, x2, y2))
+            valid_scores.append(float(score))
+            valid_labels.append(str(label).strip() or "asset")
+
+        if not valid_boxes:
+            return [], []
+
+        keep_indices = deduplicate_detections(
+            valid_boxes,
+            valid_scores,
+            valid_labels,
+            iou_threshold=self.dedupe_iou,
+            cross_label_iou_threshold=self.cross_label_dedupe_iou,
+        )
+        selected_boxes = np.asarray([valid_boxes[index] for index in keep_indices], dtype=np.float32)
+        selected_scores = [valid_scores[index] for index in keep_indices]
+        selected_labels = [valid_labels[index] for index in keep_indices]
+
         masks, _, _ = self._sam2_predictor.predict(
             point_coords=None,
             point_labels=None,
-            box=input_boxes,
+            box=selected_boxes,
             multimask_output=False,
         )
 
@@ -130,29 +173,19 @@ class GroundedSam2LocalAdapter:
         elif masks.ndim == 2:
             masks = masks[None, ...]
 
-        score_values = (
-            confidences.detach().cpu().tolist()
-            if hasattr(confidences, "detach")
-            else list(confidences)
-        )
-        label_values = list(labels)
-
         detections: list[AdapterDetection] = []
         normalized_masks: list[np.ndarray] = []
-
         for box, score, label, mask in zip(
-            input_boxes,
-            score_values,
-            label_values,
+            selected_boxes,
+            selected_scores,
+            selected_labels,
             masks,
         ):
-            x1, y1, x2, y2 = self._clip_box(box, width, height)
-            if x2 <= x1 or y2 <= y1:
-                continue
+            x1, y1, x2, y2 = [int(round(float(value))) for value in box]
             detections.append(
                 AdapterDetection(
-                    label=str(label).strip() or "asset",
-                    confidence=float(score),
+                    label=label,
+                    confidence=score,
                     bbox=(x1, y1, x2, y2),
                 )
             )
