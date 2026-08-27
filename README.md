@@ -1,10 +1,10 @@
 # Game Creater
 
-本地优先的游戏素材 AI 生产工具。当前目标是先稳定跑通：
+本地优先的游戏素材 AI 生产工具。当前主链已经跑通：
 
-> 场景图片 → 目标词 → GroundingDINO 检测 → SAM2/SAM2.1 分割 → 透明 PNG + Mask + `scene.json`
+> 场景图片 → 目标词 → GroundingDINO 检测 → SAM2/SAM2.1 分割 → 透明 PNG + Mask → 人工校正 → `scene.json` / ZIP
 
-项目保留 **Mock 模式** 作为无 GPU / 无模型环境下的回归测试后端；真实本地推理已经接入 `grounded_sam2_local` 适配器。
+项目保留 **Mock 模式** 作为无 GPU / 无模型环境下的回归测试后端；真实本地推理通过 `grounded_sam2_local` 适配器接入。
 
 ## 当前功能
 
@@ -13,13 +13,16 @@
 - Mock 模式完整验证产品链路
 - 本地 GroundingDINO + SAM2/SAM2.1 真实检测与分割适配器
 - 自动检查模型依赖、权重和设备状态
-- 导出透明 RGBA PNG
-- 导出单资产 Mask
+- 导出透明 RGBA PNG 与单资产 Mask
 - 自动生成 `scene.json`
 - 自动生成 Mask + BBox 场景 Overlay
+- 保留原始源图，支持后续无模型人工编辑
+- 素材名称、分类、备注编辑并持久化
+- 删除错误素材并自动重建 Overlay
+- 多选素材合并为一个新资产
+- 用矩形区域把一个 Mask 拆成两个资产
 - 一键打包下载当前场景 ZIP
-- 前端查看拆解素材并单独下载
-- GitHub Actions 自动回归测试 Mock 主链
+- GitHub Actions 自动回归测试核心主链与人工编辑
 
 ## 项目结构
 
@@ -27,15 +30,17 @@
 game_creater/
 ├─ backend/
 │  ├─ app/
-│  │  ├─ __init__.py
 │  │  ├─ main.py
 │  │  ├─ models.py
 │  │  └─ services/
-│  │     ├─ __init__.py
 │  │     ├─ pipeline.py
-│  │     └─ grounded_sam2_local.py
+│  │     ├─ grounded_sam2_local.py
+│  │     ├─ scene_store.py
+│  │     └─ asset_editor.py
 │  ├─ tests/
-│  │  └─ test_mock_pipeline.py
+│  │  ├─ test_mock_pipeline.py
+│  │  ├─ test_scene_store.py
+│  │  └─ test_asset_editor.py
 │  ├─ requirements.txt
 │  └─ requirements-dev.txt
 ├─ config/
@@ -82,10 +87,10 @@ Mock 不做真实 AI 识别，但会真实执行：
 → Mask 生成
 → RGBA Alpha 合成
 → 单资产裁剪
-→ PNG 导出
-→ Mask 导出
+→ PNG / Mask 导出
 → Overlay 生成
 → scene.json 生成
+→ 删除 / 合并 / 拆分 / 元数据编辑
 → ZIP 打包
 → Web 前端展示
 ```
@@ -101,7 +106,9 @@ SAM2 / SAM2.1
     ↓ mask
 Game Creater pipeline
     ↓
-RGBA PNG / Mask / Overlay / scene.json / ZIP
+RGBA PNG / Mask / Overlay / scene.json
+    ↓
+Asset Editor 人工校正
 ```
 
 ### 推荐环境
@@ -114,42 +121,27 @@ RGBA PNG / Mask / Overlay / scene.json / ZIP
 - 与 PyTorch 匹配的 CUDA Toolkit
 - NVIDIA GPU 推荐
 
-Windows 原生仍可运行前端和 Mock 后端，但 Grounded-SAM2 官方对 Windows 更推荐 WSL。
+Windows 原生仍可运行前端和 Mock 后端；Grounded-SAM2 重模型层推荐放在 WSL2 / Linux。
 
 ### 安装
 
-先根据你的显卡/CUDA，从 PyTorch 官方安装匹配的 `torch` 和 `torchvision`。
-
-然后在仓库根目录执行：
+先根据显卡/CUDA，从 PyTorch 官方安装匹配的 `torch` 和 `torchvision`，然后在仓库根目录执行：
 
 ```bash
 bash scripts/setup_grounded_sam2_wsl.sh
 ```
 
-脚本会：
-
-1. 检查 PyTorch / TorchVision
-2. Clone / 更新 `IDEA-Research/Grounded-SAM-2`
-3. 安装 SAM2
-4. 安装 GroundingDINO
-5. 下载 SAM2 checkpoints
-6. 下载 GroundingDINO checkpoint
-7. 输出需要设置的环境变量
+脚本会检查 PyTorch/TorchVision，Clone Grounded-SAM-2，安装 SAM2 与 GroundingDINO，并准备 checkpoint。
 
 ### 启动真实模式
-
-假设脚本使用默认安装目录：
 
 ```bash
 export GAME_CREATER_MODE=grounded_sam2_local
 export GAME_CREATER_DEVICE=auto
-
 export GROUNDING_DINO_CONFIG="$HOME/.local/share/game_creater/Grounded-SAM-2/grounding_dino/groundingdino/config/GroundingDINO_SwinT_OGC.py"
 export GROUNDING_DINO_CHECKPOINT="$HOME/.local/share/game_creater/Grounded-SAM-2/gdino_checkpoints/groundingdino_swint_ogc.pth"
-
 export SAM2_MODEL_CONFIG="configs/sam2.1/sam2.1_hiera_l.yaml"
 export SAM2_CHECKPOINT="$HOME/.local/share/game_creater/Grounded-SAM-2/checkpoints/sam2.1_hiera_large.pt"
-
 export GAME_CREATER_BOX_THRESHOLD=0.35
 export GAME_CREATER_TEXT_THRESHOLD=0.25
 
@@ -157,45 +149,63 @@ cd backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-也可以参考：
-
-```text
-config/grounded_sam2.env.example
-```
+环境变量示例见 `config/grounded_sam2.env.example`。
 
 ## 3. 模型健康检查
-
-浏览器或 API 请求：
 
 ```text
 GET /api/health
 GET /api/v1/models/status
 ```
 
-真实模式会检查：
+真实模式检查 `torch`、`sam2`、`grounding_dino`、配置文件、checkpoint、CPU/CUDA 状态。模型未就绪时前端会直接显示缺失项。
 
-- `torch`
-- `sam2`
-- `grounding_dino`
-- GroundingDINO config
-- GroundingDINO checkpoint
-- SAM2 checkpoint
-- SAM2 config
-- CPU / CUDA 状态
+## 4. 人工校正 API
 
-模型未就绪时，前端会直接显示缺失项，并禁止启动拆解，避免进入推理后才报错。
-
-## 4. 输入 Prompt
-
-GroundingDINO 更适合英文对象词，例如：
+修改素材元数据：
 
 ```text
-tree, rock, house, crate, grass, barrel, fence
+PATCH /api/v1/scenes/<scene_id>/assets/<asset_id>
 ```
 
-后端会自动整理成 GroundingDINO 所需的点号分隔文本形式。
+删除错误素材：
 
-后续语义联想模块会负责把中文素材概念自动映射成检测 Prompt。
+```text
+DELETE /api/v1/scenes/<scene_id>/assets/<asset_id>
+```
+
+合并多个素材：
+
+```text
+POST /api/v1/scenes/<scene_id>/assets/merge
+```
+
+示例请求：
+
+```json
+{
+  "asset_ids": ["asset_0001", "asset_0002"],
+  "label": "large_tree",
+  "category": "vegetation",
+  "keep_sources": false
+}
+```
+
+矩形拆分一个 Mask：
+
+```text
+POST /api/v1/scenes/<scene_id>/assets/<asset_id>/split
+```
+
+```json
+{
+  "rect": {"x1": 100, "y1": 80, "x2": 400, "y2": 300},
+  "inside_label": "tree_top",
+  "outside_label": "tree_bottom"
+}
+```
+
+当前矩形拆分是 v0.2 的基础人工工具：矩形内 Mask 作为 Part A，原 Mask 的其余部分作为 Part B。后续会增加直接在画面上框选、画笔与 SAM 点击提示。
 
 ## 5. 输出结构
 
@@ -203,6 +213,8 @@ tree, rock, house, crate, grass, barrel, fence
 
 ```text
 workspace/<scene_id>/
+├─ source/
+│  └─ source.png          # 保留源图，人工编辑时重新生成透明素材
 ├─ assets/
 │  ├─ tree_001.png
 │  └─ rock_001.png
@@ -214,16 +226,7 @@ workspace/<scene_id>/
 └─ scene.json
 ```
 
-`scene.json` 保存：
-
-- asset ID
-- label
-- confidence
-- bbox
-- source position
-- transparent PNG path
-- mask path
-- overlay preview path
+人工删除、合并和拆分后，`assets/`、`masks/`、Overlay 与 `scene.json` 会同步更新。
 
 完整场景可通过：
 
@@ -231,9 +234,19 @@ workspace/<scene_id>/
 GET /api/v1/scenes/<scene_id>/export.zip
 ```
 
-打包下载，ZIP 内包含 `scene.json`、所有透明 PNG、Mask 和 Overlay。
+打包下载。
 
-## 6. 测试
+## 6. 输入 Prompt
+
+GroundingDINO 更适合英文对象词，例如：
+
+```text
+tree, rock, house, crate, grass, barrel, fence
+```
+
+后续语义联想模块负责把中文素材概念自动映射成检测 Prompt。
+
+## 7. 测试
 
 ```bash
 cd backend
@@ -241,7 +254,7 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-当前测试不下载 AI 权重，只测试 Mock 主链，因此 GitHub Actions 可以稳定验证：
+CI 不下载 AI 权重，当前自动验证：
 
 ```text
 输入图片
@@ -250,6 +263,10 @@ python -m pytest -q
 → RGBA PNG
 → Overlay
 → scene.json
+→ 元数据持久化
+→ 删除素材
+→ 合并 Mask
+→ 矩形拆分 Mask
 → ZIP
 ```
 
@@ -270,9 +287,13 @@ python -m pytest -q
 
 ### v0.2
 
-- [ ] 点击添加 / 删除目标
-- [ ] Mask 合并与拆分
-- [ ] 素材重命名和分类
+- [x] 素材重命名、分类、备注
+- [x] 删除错误素材
+- [x] 多素材 Mask 合并
+- [x] 矩形拆分 Mask
+- [x] 编辑后自动重建透明 PNG / Mask / Overlay / JSON
+- [ ] 直接在 Scene Viewer 拖拽框选拆分区域
+- [ ] SAM 点击添加 / 修正 Mask
 - [ ] 多实例过滤与去重
 - [ ] Asset Score
 
@@ -293,6 +314,4 @@ python -m pytest -q
 
 ## 设计原则
 
-模型不是核心数据结构。检测器、分割器和补全模型都通过适配层接入，核心业务只依赖统一的 `Detection / Mask / Asset / SceneManifest` 数据模型。
-
-这样未来可以替换 GroundingDINO、SAM2、BiRefNet 或其他模型，而不重写素材管理和导出逻辑。
+模型不是核心数据结构。检测器、分割器和补全模型通过适配层接入，核心业务只依赖统一的 `Detection / Mask / Asset / SceneManifest` 数据模型；人工校正层也完全独立于推理模型。
