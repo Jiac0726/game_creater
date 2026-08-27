@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw
 from app.models import AssetRecord, BBox, SceneManifest
 from app.services.asset_scoring import score_asset
 from app.services.grounded_sam2_local import GroundedSam2LocalAdapter
+from app.services.semantic_scoring import semantic_asset_value
 
 
 @dataclass
@@ -105,6 +106,7 @@ class AssetSplitPipeline:
                 scene_width=image.width,
                 scene_height=image.height,
                 bbox=bbox,
+                semantic_value=semantic_asset_value(detection.label),
             )
 
             alpha = Image.fromarray((mask.astype(np.uint8) * 255), mode="L")
