@@ -21,6 +21,7 @@ class AssetRecord(BaseModel):
     bbox: BBox
     image: str
     mask: str
+    alpha: Optional[str] = None
     source_position: dict = Field(default_factory=dict)
     completed: bool = False
     notes: Optional[str] = None
@@ -60,6 +61,10 @@ class AssetPointSegmentRequest(BaseModel):
     asset_id: Optional[str] = None
     use_asset_box: bool = True
     confidence: float = 0.95
+
+
+class AssetEdgeRefineRequest(BaseModel):
+    radius: int = 6
 
 
 class SceneManifest(BaseModel):
