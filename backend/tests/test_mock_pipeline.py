@@ -24,6 +24,11 @@ def test_mock_pipeline_exports_assets_masks_manifest_and_overlay(tmp_path: Path,
     assert manifest.height == 64
     assert len(manifest.assets) == 2
     assert manifest.preview_image == "preview/overlay.png"
+    assert manifest.inference_stats["raw_detections"] == 2
+    assert manifest.inference_stats["after_box_dedupe"] == 2
+    assert manifest.inference_stats["after_mask_dedupe"] == 2
+    assert manifest.inference_stats["box_duplicates_removed"] == 0
+    assert manifest.inference_stats["mask_duplicates_removed"] == 0
 
     scene_dir = workspace / manifest.scene_id
     manifest_path = scene_dir / "scene.json"
@@ -34,6 +39,7 @@ def test_mock_pipeline_exports_assets_masks_manifest_and_overlay(tmp_path: Path,
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["scene_id"] == manifest.scene_id
     assert payload["preview_image"] == "preview/overlay.png"
+    assert payload["inference_stats"]["raw_detections"] == 2
     assert [item["label"] for item in payload["assets"]] == ["tree", "rock"]
 
     preview = Image.open(preview_path)
