@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from app.services.detection_filter import deduplicate_detections
+from app.services.detection_filter import deduplicate_detections, deduplicate_masks
 
 
 @dataclass
@@ -23,9 +23,8 @@ class GroundedSam2LocalAdapter:
 
     Heavy dependencies are imported only when this adapter is selected, so the
     core FastAPI application can still run in mock mode without torch/CUDA.
-    GroundingDINO duplicate boxes are suppressed before SAM2 so one physical
-    object does not consume multiple segmentation passes or produce duplicate
-    game assets.
+    Duplicate boxes are suppressed before SAM2 and near-identical masks are
+    suppressed again after SAM2 to avoid duplicate exported game assets.
     """
 
     def __init__(self) -> None:
@@ -42,6 +41,10 @@ class GroundedSam2LocalAdapter:
         self.dedupe_iou = float(os.getenv("GAME_CREATER_DEDUPE_IOU", "0.65"))
         self.cross_label_dedupe_iou = float(
             os.getenv("GAME_CREATER_CROSS_LABEL_DEDUPE_IOU", "0.92")
+        )
+        self.mask_dedupe_iou = float(os.getenv("GAME_CREATER_MASK_DEDUPE_IOU", "0.86"))
+        self.cross_label_mask_dedupe_iou = float(
+            os.getenv("GAME_CREATER_CROSS_LABEL_MASK_DEDUPE_IOU", "0.96")
         )
 
         self._torch: Any | None = None
@@ -86,6 +89,8 @@ class GroundedSam2LocalAdapter:
             "text_threshold": self.text_threshold,
             "dedupe_iou": self.dedupe_iou,
             "cross_label_dedupe_iou": self.cross_label_dedupe_iou,
+            "mask_dedupe_iou": self.mask_dedupe_iou,
+            "cross_label_mask_dedupe_iou": self.cross_label_mask_dedupe_iou,
             "checks": checks,
         }
 
@@ -172,26 +177,31 @@ class GroundedSam2LocalAdapter:
             masks = masks.squeeze(1)
         elif masks.ndim == 2:
             masks = masks[None, ...]
+        normalized_masks = [np.asarray(mask, dtype=bool) for mask in masks]
 
-        detections: list[AdapterDetection] = []
-        normalized_masks: list[np.ndarray] = []
-        for box, score, label, mask in zip(
-            selected_boxes,
+        mask_keep = deduplicate_masks(
+            normalized_masks,
             selected_scores,
             selected_labels,
-            masks,
-        ):
+            iou_threshold=self.mask_dedupe_iou,
+            cross_label_iou_threshold=self.cross_label_mask_dedupe_iou,
+        )
+
+        detections: list[AdapterDetection] = []
+        kept_masks: list[np.ndarray] = []
+        for index in mask_keep:
+            box = selected_boxes[index]
             x1, y1, x2, y2 = [int(round(float(value))) for value in box]
             detections.append(
                 AdapterDetection(
-                    label=label,
-                    confidence=score,
+                    label=selected_labels[index],
+                    confidence=selected_scores[index],
                     bbox=(x1, y1, x2, y2),
                 )
             )
-            normalized_masks.append(np.asarray(mask, dtype=bool))
+            kept_masks.append(normalized_masks[index])
 
-        return detections, normalized_masks
+        return detections, kept_masks
 
     def _ensure_loaded(self) -> None:
         if self._grounding_model is not None and self._sam2_predictor is not None:
