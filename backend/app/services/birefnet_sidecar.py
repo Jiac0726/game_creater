@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import urllib.error
 import urllib.request
-from pathlib import Path
 from typing import Any
+
+from PIL import Image
 
 
 class BiRefNetSidecarError(RuntimeError):
@@ -13,11 +16,11 @@ class BiRefNetSidecarError(RuntimeError):
 
 
 class BiRefNetSidecarClient:
-    """Small stdlib-only client for the isolated local BiRefNet worker.
+    """Stdlib HTTP client for the isolated localhost BiRefNet worker.
 
-    BiRefNet intentionally lives in another Python environment because its
-    official dependency set currently conflicts with the main backend's NumPy
-    version. The sidecar binds to localhost and exchanges only local file paths.
+    Image bytes are exchanged in-memory as base64 PNG. The worker never receives
+    filesystem paths, so it cannot read or write arbitrary files from the main
+    backend environment.
     """
 
     def __init__(self) -> None:
@@ -32,12 +35,11 @@ class BiRefNetSidecarClient:
         except Exception as exc:
             return {"ready": False, "error": str(exc), "url": self.base_url}
 
-    def predict_alpha(self, image_path: str | Path, output_path: str | Path) -> dict[str, Any]:
+    def predict_alpha(self, image: Image.Image) -> Image.Image:
+        buffer = io.BytesIO()
+        image.convert("RGB").save(buffer, format="PNG")
         payload = json.dumps(
-            {
-                "image_path": str(Path(image_path).resolve()),
-                "output_path": str(Path(output_path).resolve()),
-            }
+            {"image_base64": base64.b64encode(buffer.getvalue()).decode("ascii")}
         ).encode("utf-8")
         request = urllib.request.Request(
             f"{self.base_url}/predict",
@@ -54,6 +56,10 @@ class BiRefNetSidecarClient:
         except Exception as exc:
             raise BiRefNetSidecarError(f"BiRefNet sidecar unavailable: {exc}") from exc
 
-        if not result.get("ok"):
+        if not result.get("ok") or not result.get("alpha_base64"):
             raise BiRefNetSidecarError(result.get("error") or "BiRefNet sidecar prediction failed")
-        return result
+        try:
+            alpha_bytes = base64.b64decode(result["alpha_base64"], validate=True)
+            return Image.open(io.BytesIO(alpha_bytes)).convert("L")
+        except Exception as exc:
+            raise BiRefNetSidecarError(f"Invalid alpha response from BiRefNet sidecar: {exc}") from exc
