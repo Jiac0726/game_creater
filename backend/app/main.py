@@ -17,11 +17,14 @@ from app.models import (
     AssetRecord,
     AssetSplitRequest,
     SceneManifest,
+    SceneRecommendRequest,
+    SceneRecommendations,
     SemanticExpandRequest,
     SemanticExpansion,
 )
 from app.services.asset_editor import AssetEditor
 from app.services.pipeline import AssetSplitPipeline
+from app.services.scene_recommender import SceneRecommender
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
 from app.services.semantic_engine import SemanticEngine
 
@@ -48,6 +51,7 @@ pipeline = AssetSplitPipeline(WORKSPACE)
 scene_store = SceneStore(WORKSPACE)
 asset_editor = AssetEditor(WORKSPACE)
 semantic_engine = SemanticEngine()
+scene_recommender = SceneRecommender()
 
 
 @app.get("/api/health")
@@ -114,6 +118,30 @@ def analyze_scene(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/scenes/{scene_id}/recommendations",
+    response_model=SceneRecommendations,
+)
+def recommend_missing_assets(
+    scene_id: str,
+    request: SceneRecommendRequest,
+) -> SceneRecommendations:
+    _validate_scene_id(scene_id)
+    try:
+        manifest = scene_store.load(scene_id)
+        expansion = semantic_engine.expand(request.keyword, depth=1, max_per_group=30)
+        return scene_recommender.recommend(
+            manifest,
+            expansion,
+            max_results=request.max_results,
+            min_semantic_score=request.min_semantic_score,
+        )
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.patch(
