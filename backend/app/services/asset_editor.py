@@ -121,6 +121,7 @@ class AssetEditor:
         if not inside_label or not outside_label:
             raise ValueError("Split asset labels cannot be empty")
 
+        part_ids = self._next_asset_ids(manifest, 2)
         part_a = self._write_asset(
             manifest=manifest,
             mask=inside,
@@ -128,6 +129,7 @@ class AssetEditor:
             category=asset.category,
             confidence=asset.confidence,
             notes=asset.notes,
+            asset_id=part_ids[0],
         )
         part_b = self._write_asset(
             manifest=manifest,
@@ -136,6 +138,7 @@ class AssetEditor:
             category=asset.category,
             confidence=asset.confidence,
             notes=asset.notes,
+            asset_id=part_ids[1],
         )
 
         manifest.assets = [item for item in manifest.assets if item.id != asset_id]
@@ -153,11 +156,12 @@ class AssetEditor:
         category: str,
         confidence: float,
         notes: str | None,
+        asset_id: str | None = None,
     ) -> AssetRecord:
         scene_dir = self.workspace / manifest.scene_id
         source = self._source_image(manifest)
         bbox = self._bbox_from_mask(mask)
-        asset_id = self._next_asset_id(manifest)
+        asset_id = asset_id or self._next_asset_id(manifest)
         stem = f"{asset_id}_{self._slug(label)}"
 
         alpha = Image.fromarray(mask.astype(np.uint8) * 255, mode="L")
@@ -260,14 +264,18 @@ class AssetEditor:
         )
 
     @staticmethod
-    def _next_asset_id(manifest: SceneManifest) -> str:
+    def _next_asset_ids(manifest: SceneManifest, count: int) -> list[str]:
         max_id = 0
         for asset in manifest.assets:
             try:
                 max_id = max(max_id, int(asset.id.rsplit("_", 1)[-1]))
             except (TypeError, ValueError):
                 continue
-        return f"asset_{max_id + 1:04d}"
+        return [f"asset_{max_id + offset:04d}" for offset in range(1, count + 1)]
+
+    @classmethod
+    def _next_asset_id(cls, manifest: SceneManifest) -> str:
+        return cls._next_asset_ids(manifest, 1)[0]
 
     @staticmethod
     def _delete_asset_files(scene_dir: Path, asset: AssetRecord) -> None:
