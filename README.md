@@ -16,6 +16,8 @@
 - 导出透明 RGBA PNG
 - 导出单资产 Mask
 - 自动生成 `scene.json`
+- 自动生成 Mask + BBox 场景 Overlay
+- 一键打包下载当前场景 ZIP
 - 前端查看拆解素材并单独下载
 - GitHub Actions 自动回归测试 Mock 主链
 
@@ -82,7 +84,9 @@ Mock 不做真实 AI 识别，但会真实执行：
 → 单资产裁剪
 → PNG 导出
 → Mask 导出
+→ Overlay 生成
 → scene.json 生成
+→ ZIP 打包
 → Web 前端展示
 ```
 
@@ -97,7 +101,7 @@ SAM2 / SAM2.1
     ↓ mask
 Game Creater pipeline
     ↓
-RGBA PNG / Mask / scene.json
+RGBA PNG / Mask / Overlay / scene.json / ZIP
 ```
 
 ### 推荐环境
@@ -205,6 +209,8 @@ workspace/<scene_id>/
 ├─ masks/
 │  ├─ tree_001.png
 │  └─ rock_001.png
+├─ preview/
+│  └─ overlay.png
 └─ scene.json
 ```
 
@@ -217,8 +223,15 @@ workspace/<scene_id>/
 - source position
 - transparent PNG path
 - mask path
+- overlay preview path
 
-这些数据后续用于 Unity / Godot 导出和场景重建。
+完整场景可通过：
+
+```text
+GET /api/v1/scenes/<scene_id>/export.zip
+```
+
+打包下载，ZIP 内包含 `scene.json`、所有透明 PNG、Mask 和 Overlay。
 
 ## 6. 测试
 
@@ -235,7 +248,9 @@ python -m pytest -q
 → Detection
 → Mask
 → RGBA PNG
+→ Overlay
 → scene.json
+→ ZIP
 ```
 
 ## 开发路线
@@ -249,8 +264,9 @@ python -m pytest -q
 - [x] GroundingDINO + SAM2/SAM2.1 本地适配层
 - [x] 模型健康检查
 - [x] Mock 回归测试 + CI
-- [ ] Scene Viewer 显示真实 bbox / Mask Overlay
-- [ ] 一键 ZIP 导出
+- [x] Scene Viewer 显示 bbox / Mask Overlay
+- [x] 一键 ZIP 导出
+- [ ] 目标 WSL + NVIDIA CUDA 环境真实图片实机验证
 
 ### v0.2
 
