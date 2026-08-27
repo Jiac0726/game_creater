@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from app.services.detection_filter import (
     box_iou,
     deduplicate_detections,
+    deduplicate_masks,
     labels_equivalent,
+    mask_iou,
 )
 
 
@@ -67,6 +70,56 @@ def test_nested_semantic_labels_survive_when_boxes_are_not_nearly_identical() ->
     assert keep == [0, 1]
 
 
+def test_mask_iou_and_same_label_mask_dedupe() -> None:
+    first = np.zeros((32, 32), dtype=bool)
+    first[4:20, 4:20] = True
+    duplicate = first.copy()
+    separate = np.zeros((32, 32), dtype=bool)
+    separate[22:30, 22:30] = True
+
+    assert mask_iou(first, duplicate) == 1.0
+    keep = deduplicate_masks(
+        [first, duplicate, separate],
+        [0.92, 0.71, 0.80],
+        ["tree", "tree", "tree"],
+    )
+
+    assert keep == [0, 2]
+
+
+def test_pixel_identical_masks_can_dedupe_different_prompt_labels() -> None:
+    mask = np.zeros((24, 24), dtype=bool)
+    mask[3:18, 5:20] = True
+
+    keep = deduplicate_masks(
+        [mask, mask.copy()],
+        [0.89, 0.73],
+        ["machine", "industrial equipment"],
+        cross_label_iou_threshold=0.96,
+    )
+
+    assert keep == [0]
+
+
+def test_different_labels_with_non_identical_masks_are_preserved() -> None:
+    large = np.zeros((40, 40), dtype=bool)
+    large[5:35, 5:35] = True
+    nested = np.zeros((40, 40), dtype=bool)
+    nested[15:30, 15:30] = True
+
+    keep = deduplicate_masks(
+        [large, nested],
+        [0.9, 0.84],
+        ["tree", "tree stump"],
+        iou_threshold=0.86,
+        cross_label_iou_threshold=0.96,
+    )
+
+    assert keep == [0, 1]
+
+
 def test_mismatched_inputs_raise() -> None:
     with pytest.raises(ValueError, match="same length"):
         deduplicate_detections([(0, 0, 10, 10)], [0.9, 0.8], ["tree"])
+    with pytest.raises(ValueError, match="same length"):
+        deduplicate_masks([np.zeros((2, 2), dtype=bool)], [0.9, 0.8], ["tree"])
