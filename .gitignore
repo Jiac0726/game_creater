@@ -16,6 +16,7 @@ Thumbs.db
 # Runtime workspace
 workspace/*
 !workspace/.gitkeep
+validation_output/
 
 # Local AI model weights
 model_weights/*
