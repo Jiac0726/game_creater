@@ -4,13 +4,14 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List
+from typing import Any, Iterable, List
 from uuid import uuid4
 
 import numpy as np
 from PIL import Image
 
 from app.models import AssetRecord, BBox, SceneManifest
+from app.services.grounded_sam2_local import GroundedSam2LocalAdapter
 
 
 @dataclass
@@ -21,23 +22,39 @@ class Detection:
 
 
 class AssetSplitPipeline:
-    """MVP asset splitting pipeline.
-
-    `mock` mode is intentionally dependency-light so the entire upload ->
-    manifest -> transparent PNG export path can be tested before installing
-    GroundingDINO/SAM2. `grounded_sam2` is the production target adapter.
-    """
+    """Game asset splitting pipeline with a pluggable inference backend."""
 
     def __init__(self, workspace: str | Path):
         self.workspace = Path(workspace)
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.mode = os.getenv("GAME_CREATER_MODE", "mock").strip().lower()
+        self._grounded_adapter: GroundedSam2LocalAdapter | None = None
+
+    def health(self) -> dict[str, Any]:
+        if self.mode == "mock":
+            return {
+                "backend": "mock",
+                "ready": True,
+                "loaded": True,
+                "device": "cpu",
+                "checks": {},
+            }
+        if self.mode in {"grounded_sam2", "grounded_sam2_local"}:
+            return self._get_grounded_adapter().status()
+        return {
+            "backend": self.mode,
+            "ready": False,
+            "loaded": False,
+            "device": None,
+            "checks": {"supported_mode": False},
+        }
 
     def run(self, image_path: str | Path, prompts: Iterable[str]) -> SceneManifest:
         prompts = [p.strip() for p in prompts if p.strip()]
         if not prompts:
             prompts = ["asset"]
 
+        image_path = Path(image_path)
         image = Image.open(image_path).convert("RGBA")
         scene_id = uuid4().hex[:12]
         project_dir = self.workspace / scene_id
@@ -49,8 +66,8 @@ class AssetSplitPipeline:
         if self.mode == "mock":
             detections = self._mock_detect(image.width, image.height, prompts)
             masks = [self._rect_mask(image.width, image.height, d.bbox) for d in detections]
-        elif self.mode == "grounded_sam2":
-            detections, masks = self._grounded_sam2(image, prompts)
+        elif self.mode in {"grounded_sam2", "grounded_sam2_local"}:
+            detections, masks = self._grounded_sam2(image_path, prompts)
         else:
             raise ValueError(f"Unsupported GAME_CREATER_MODE={self.mode!r}")
 
@@ -83,7 +100,7 @@ class AssetSplitPipeline:
 
         manifest = SceneManifest(
             scene_id=scene_id,
-            source_image=Path(image_path).name,
+            source_image=image_path.name,
             width=image.width,
             height=image.height,
             mode=self.mode,
@@ -121,12 +138,26 @@ class AssetSplitPipeline:
         mask[y1:y2, x1:x2] = True
         return mask
 
-    def _grounded_sam2(self, image: Image.Image, prompts: list[str]):
-        raise RuntimeError(
-            "Grounded-SAM2 adapter is not installed yet. "
-            "Use GAME_CREATER_MODE=mock to validate the MVP workflow, then wire "
-            "GroundingDINO + SAM2 in this method."
-        )
+    def _grounded_sam2(
+        self,
+        image_path: Path,
+        prompts: list[str],
+    ) -> tuple[list[Detection], list[np.ndarray]]:
+        raw_detections, masks = self._get_grounded_adapter().predict(image_path, prompts)
+        detections = [
+            Detection(
+                label=item.label,
+                confidence=item.confidence,
+                bbox=item.bbox,
+            )
+            for item in raw_detections
+        ]
+        return detections, masks
+
+    def _get_grounded_adapter(self) -> GroundedSam2LocalAdapter:
+        if self._grounded_adapter is None:
+            self._grounded_adapter = GroundedSam2LocalAdapter()
+        return self._grounded_adapter
 
     @staticmethod
     def _slug(value: str) -> str:
