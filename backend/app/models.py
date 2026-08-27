@@ -46,6 +46,22 @@ class AssetSplitRequest(BaseModel):
     outside_label: Optional[str] = None
 
 
+class PointPrompt(BaseModel):
+    x: int
+    y: int
+    positive: bool = True
+
+
+class AssetPointSegmentRequest(BaseModel):
+    points: List[PointPrompt]
+    label: str = "asset"
+    category: Optional[str] = None
+    notes: Optional[str] = None
+    asset_id: Optional[str] = None
+    use_asset_box: bool = True
+    confidence: float = 0.95
+
+
 class SceneManifest(BaseModel):
     scene_id: str
     source_image: str
