@@ -25,9 +25,11 @@
 game_creater/
 ├─ backend/
 │  ├─ app/
+│  │  ├─ __init__.py
 │  │  ├─ main.py
 │  │  ├─ models.py
 │  │  └─ services/
+│  │     ├─ __init__.py
 │  │     ├─ pipeline.py
 │  │     └─ grounded_sam2_local.py
 │  ├─ tests/
@@ -223,7 +225,7 @@ workspace/<scene_id>/
 ```bash
 cd backend
 python -m pip install -r requirements-dev.txt
-pytest -q
+python -m pytest -q
 ```
 
 当前测试不下载 AI 权重，只测试 Mock 主链，因此 GitHub Actions 可以稳定验证：
