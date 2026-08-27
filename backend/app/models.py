@@ -24,6 +24,12 @@ class AssetRecord(BaseModel):
     notes: Optional[str] = None
 
 
+class AssetPatch(BaseModel):
+    label: Optional[str] = None
+    category: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class SceneManifest(BaseModel):
     scene_id: str
     source_image: str
