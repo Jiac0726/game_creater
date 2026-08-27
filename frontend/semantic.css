@@ -7,11 +7,12 @@
 .semantic-controls label { display: grid; gap: 6px; color: #8492a6; font-size: 11px; }
 .semantic-controls input, .semantic-controls select { width: 100%; border: 1px solid #2a3547; border-radius: 9px; background: #0b1018; color: #edf4ff; padding: 10px 11px; outline: none; }
 .semantic-controls input:focus, .semantic-controls select:focus { border-color: #427fb8; }
-#semanticExpandBtn, #semanticApplyBtn, #semanticAnalyzeBtn { border-radius: 9px; padding: 10px 12px; cursor: pointer; font-weight: 700; }
+#semanticExpandBtn, #semanticApplyBtn, #semanticAnalyzeBtn, #semanticRecommendBtn { border-radius: 9px; padding: 10px 12px; cursor: pointer; font-weight: 700; }
 #semanticExpandBtn { border: 0; background: #6f8cff; color: #081020; }
-#semanticApplyBtn, #semanticAnalyzeBtn { border: 1px solid #30415a; background: #111925; color: #cfe6ff; }
+#semanticApplyBtn, #semanticAnalyzeBtn, #semanticRecommendBtn { border: 1px solid #30415a; background: #111925; color: #cfe6ff; }
 #semanticAnalyzeBtn { border-color: #285f42; color: #bff4d2; }
-#semanticExpandBtn:disabled, #semanticApplyBtn:disabled, #semanticAnalyzeBtn:disabled { opacity: .45; cursor: not-allowed; }
+#semanticRecommendBtn { border-color: #665129; color: #f1d28b; }
+#semanticExpandBtn:disabled, #semanticApplyBtn:disabled, #semanticAnalyzeBtn:disabled, #semanticRecommendBtn:disabled { opacity: .45; cursor: not-allowed; }
 .semantic-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .semantic-examples { display: flex; gap: 7px; flex-wrap: wrap; padding: 0 16px 14px; }
 .example-chip { border: 1px solid #29384d; background: #101721; color: #91a2b8; border-radius: 999px; padding: 5px 9px; cursor: pointer; font-size: 10px; }
@@ -32,9 +33,24 @@
 .semantic-chip.variant { border-style: dashed; border-color: #51436a; }
 .semantic-chip.active { border-color: #4a9ff5; background: #15283c; }
 
+.semantic-recommendations { margin-top: 16px; padding-top: 14px; border-top: 1px solid #2a2f39; }
+.recommendation-head { display: flex; justify-content: space-between; gap: 12px; align-items: end; }
+.recommendation-head > div { display: grid; gap: 4px; }
+.recommendation-head strong { color: #f1f5fb; font-size: 13px; }
+.recommendation-head span, .recommendation-head small { color: #7f8da1; font-size: 10px; }
+.coverage-track { height: 7px; border-radius: 999px; background: #0b1018; overflow: hidden; margin: 9px 0 12px; border: 1px solid #202938; }
+.coverage-track span { display: block; height: 100%; background: linear-gradient(90deg, #4a9ff5, #7ddc99); border-radius: inherit; }
+.missing-asset-cloud { display: flex; gap: 7px; flex-wrap: wrap; }
+.missing-asset-chip { display: grid; gap: 2px; border: 1px solid #584929; border-radius: 9px; background: #17150f; color: #efd08a; padding: 7px 9px; cursor: pointer; text-align: left; }
+.missing-asset-chip small { color: #8f805e; font-size: 9px; }
+.missing-asset-chip.added { border-color: #285f42; color: #a5f4c5; background: #101b15; }
+.coverage-complete { color: #a5f4c5; font-size: 11px; }
+.recommendation-error { color: #ffb7b7; font-size: 11px; }
+
 @media (max-width: 980px) {
   .semantic-controls { grid-template-columns: 1fr 1fr; }
   .semantic-controls > label:first-child { grid-column: 1 / -1; }
   .semantic-actions { grid-column: 1 / -1; }
   .semantic-group { grid-template-columns: 1fr; gap: 5px; }
+  .recommendation-head { align-items: flex-start; flex-direction: column; }
 }
