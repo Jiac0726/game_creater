@@ -150,6 +150,72 @@ class AssetEditor:
         self._rebuild_overlay(manifest)
         return self.store.load(scene_id)
 
+    def upsert_from_mask(
+        self,
+        scene_id: str,
+        mask: np.ndarray,
+        *,
+        label: str,
+        category: str | None = None,
+        notes: str | None = None,
+        confidence: float = 0.95,
+        replace_asset_id: str | None = None,
+    ) -> SceneManifest:
+        """Create a new asset or replace an existing asset from a full-scene mask.
+
+        This is the bridge used by interactive SAM point prompts. The method is
+        model-independent: any future segmenter can provide a boolean mask and
+        reuse the same PNG/Mask/score/overlay persistence workflow.
+        """
+        manifest = self.store.load(scene_id)
+        scene_dir = self.workspace / scene_id
+        normalized = np.asarray(mask, dtype=bool)
+        if normalized.shape != (manifest.height, manifest.width):
+            raise ValueError("Mask shape must match the scene dimensions")
+        if not normalized.any():
+            raise ValueError("Mask is empty")
+
+        clean_label = label.strip()
+        if not clean_label:
+            raise ValueError("Asset label cannot be empty")
+
+        existing: AssetRecord | None = None
+        existing_index: int | None = None
+        if replace_asset_id:
+            existing = self._asset(manifest, replace_asset_id)
+            existing_index = next(
+                index for index, item in enumerate(manifest.assets) if item.id == replace_asset_id
+            )
+
+        resolved_category = (category or (existing.category if existing else "uncategorized")).strip()
+        resolved_category = resolved_category or "uncategorized"
+        resolved_notes = notes if notes is not None else (existing.notes if existing else None)
+        target_id = existing.id if existing else None
+
+        updated = self._write_asset(
+            manifest=manifest,
+            mask=normalized,
+            label=clean_label,
+            category=resolved_category,
+            confidence=confidence,
+            notes=resolved_notes,
+            asset_id=target_id,
+        )
+
+        if existing is not None and existing_index is not None:
+            manifest.assets[existing_index] = updated
+            for old_rel, new_rel in ((existing.image, updated.image), (existing.mask, updated.mask)):
+                if old_rel != new_rel:
+                    old_path = scene_dir / old_rel
+                    if old_path.is_file():
+                        old_path.unlink()
+        else:
+            manifest.assets.append(updated)
+
+        self.store.save(manifest)
+        self._rebuild_overlay(manifest)
+        return self.store.load(scene_id)
+
     def _write_asset(
         self,
         manifest: SceneManifest,
