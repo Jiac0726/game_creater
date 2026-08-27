@@ -17,7 +17,7 @@ UPLOADS = WORKSPACE / "uploads"
 FRONTEND = REPO_ROOT / "frontend"
 UPLOADS.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Game Creater", version="0.1.0")
+app = FastAPI(title="Game Creater", version="0.1.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,7 +31,18 @@ pipeline = AssetSplitPipeline(WORKSPACE)
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "mode": pipeline.mode, "version": "0.1.0"}
+    model = pipeline.health()
+    return {
+        "ok": True,
+        "mode": pipeline.mode,
+        "version": "0.1.1",
+        "model": model,
+    }
+
+
+@app.get("/api/v1/models/status")
+def model_status() -> dict:
+    return pipeline.health()
 
 
 @app.post("/api/v1/scenes/analyze", response_model=SceneManifest)
@@ -55,6 +66,8 @@ def analyze_scene(
 
     try:
         return pipeline.run(upload_path, labels)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
