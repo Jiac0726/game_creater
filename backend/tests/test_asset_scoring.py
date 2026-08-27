@@ -56,3 +56,30 @@ def test_lower_detector_confidence_reduces_score_for_same_geometry() -> None:
     low, _ = score_asset(mask, 0.2, 80, 80, (10, 10, 40, 40))
 
     assert high > low
+
+
+def test_semantic_value_contributes_to_score_without_becoming_a_hard_filter() -> None:
+    mask = np.zeros((80, 80), dtype=bool)
+    mask[10:40, 10:40] = True
+
+    known, known_components = score_asset(
+        mask,
+        confidence=0.7,
+        scene_width=80,
+        scene_height=80,
+        bbox=(10, 10, 40, 40),
+        semantic_value=1.0,
+    )
+    unknown, unknown_components = score_asset(
+        mask,
+        confidence=0.7,
+        scene_width=80,
+        scene_height=80,
+        bbox=(10, 10, 40, 40),
+        semantic_value=0.45,
+    )
+
+    assert known > unknown
+    assert unknown > 0
+    assert known_components["semantic"] == 1.0
+    assert unknown_components["semantic"] == 0.45
