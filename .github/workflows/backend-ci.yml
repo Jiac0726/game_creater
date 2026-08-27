@@ -39,3 +39,4 @@ jobs:
         run: |
           node --check ../frontend/app.js
           node --check ../frontend/semantic.js
+          node --check ../frontend/point_prompt.js
