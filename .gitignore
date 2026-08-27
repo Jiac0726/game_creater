@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime workspace
+workspace/*
+!workspace/.gitkeep
+
+# Local AI model weights
+model_weights/*
+!model_weights/.gitkeep
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.onnx
+
+# Logs
+*.log
