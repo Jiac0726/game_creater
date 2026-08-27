@@ -40,9 +40,12 @@
       </aside>
 
       <section class="card panel viewer-panel">
-        <div class="panel-title">Scene Viewer · Mask / BBox Overlay</div>
+        <div class="panel-title">Scene Viewer · 拖拽矩形可辅助拆分</div>
         <div class="viewer">
-          <img id="scenePreview" alt="场景预览" />
+          <div id="viewerStage" class="viewer-stage">
+            <img id="scenePreview" alt="场景预览" />
+            <canvas id="selectionCanvas" aria-label="矩形拆分选择层"></canvas>
+          </div>
           <div id="viewerHint">上传图片后在这里预览</div>
         </div>
       </section>
@@ -54,7 +57,7 @@
     </section>
 
     <section class="card footerbar">
-      <span id="message">上传图片后可 AI 拆解，并手动删除、合并或矩形拆分 Mask。</span>
+      <span id="message">上传图片后可 AI 拆解，并手动删除、合并或拖拽矩形拆分 Mask。</span>
       <div class="footer-actions">
         <a id="manifestLink" class="hidden" target="_blank">打开 scene.json</a>
         <a id="archiveLink" class="hidden">下载全部 ZIP</a>
