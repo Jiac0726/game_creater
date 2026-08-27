@@ -46,6 +46,7 @@ class GroundedSam2LocalAdapter:
         self.cross_label_mask_dedupe_iou = float(
             os.getenv("GAME_CREATER_CROSS_LABEL_MASK_DEDUPE_IOU", "0.96")
         )
+        self.last_stats: dict[str, int | float] = {}
 
         self._torch: Any | None = None
         self._box_convert: Any | None = None
@@ -91,6 +92,7 @@ class GroundedSam2LocalAdapter:
             "cross_label_dedupe_iou": self.cross_label_dedupe_iou,
             "mask_dedupe_iou": self.mask_dedupe_iou,
             "cross_label_mask_dedupe_iou": self.cross_label_mask_dedupe_iou,
+            "last_stats": self.last_stats,
             "checks": checks,
         }
 
@@ -100,6 +102,7 @@ class GroundedSam2LocalAdapter:
         prompts: list[str],
     ) -> tuple[list[AdapterDetection], list[np.ndarray]]:
         self._ensure_loaded()
+        self.last_stats = {}
 
         assert self._torch is not None
         assert self._box_convert is not None
@@ -122,7 +125,16 @@ class GroundedSam2LocalAdapter:
             device=self._device,
         )
 
+        raw_count = int(getattr(boxes, "shape", [0])[0]) if hasattr(boxes, "shape") else 0
         if getattr(boxes, "numel", lambda: 0)() == 0:
+            self.last_stats = {
+                "raw_detections": raw_count,
+                "valid_detections": 0,
+                "after_box_dedupe": 0,
+                "after_mask_dedupe": 0,
+                "box_duplicates_removed": 0,
+                "mask_duplicates_removed": 0,
+            }
             return [], []
 
         height, width = image_source.shape[:2]
@@ -152,6 +164,14 @@ class GroundedSam2LocalAdapter:
             valid_labels.append(str(label).strip() or "asset")
 
         if not valid_boxes:
+            self.last_stats = {
+                "raw_detections": raw_count,
+                "valid_detections": 0,
+                "after_box_dedupe": 0,
+                "after_mask_dedupe": 0,
+                "box_duplicates_removed": 0,
+                "mask_duplicates_removed": 0,
+            }
             return [], []
 
         keep_indices = deduplicate_detections(
@@ -201,6 +221,17 @@ class GroundedSam2LocalAdapter:
             )
             kept_masks.append(normalized_masks[index])
 
+        valid_count = len(valid_boxes)
+        box_count = len(selected_boxes)
+        mask_count = len(kept_masks)
+        self.last_stats = {
+            "raw_detections": raw_count,
+            "valid_detections": valid_count,
+            "after_box_dedupe": box_count,
+            "after_mask_dedupe": mask_count,
+            "box_duplicates_removed": valid_count - box_count,
+            "mask_duplicates_removed": box_count - mask_count,
+        }
         return detections, kept_masks
 
     def _ensure_loaded(self) -> None:
