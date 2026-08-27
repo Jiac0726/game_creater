@@ -14,6 +14,7 @@ from app.models import (
 )
 from app.services.asset_scoring import score_asset
 from app.services.scene_store import AssetNotFoundError, SceneStore
+from app.services.semantic_scoring import semantic_asset_value
 
 
 class AssetEditor:
@@ -170,6 +171,7 @@ class AssetEditor:
             scene_width=manifest.width,
             scene_height=manifest.height,
             bbox=bbox,
+            semantic_value=semantic_asset_value(label),
         )
 
         alpha = Image.fromarray(mask.astype(np.uint8) * 255, mode="L")
