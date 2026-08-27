@@ -13,12 +13,13 @@ def score_asset(
     scene_width: int,
     scene_height: int,
     bbox: BBox | tuple[int, int, int, int],
+    semantic_value: float | None = None,
 ) -> tuple[float, dict[str, float]]:
-    """Return a conservative v0 game-asset usefulness score.
+    """Return a bounded game-asset usefulness score.
 
-    This score intentionally uses only model-independent geometry plus detector
-    confidence. It does not try to decide semantic game value yet; that will be
-    added later by the Game Asset Ontology / semantic layer.
+    With no semantic value supplied this preserves the geometry/confidence v0
+    weighting. When ontology evidence is available, semantic value contributes
+    20% without becoming a hard filter.
     """
 
     normalized = np.asarray(mask, dtype=bool)
@@ -49,14 +50,6 @@ def score_asset(
     completeness_score = max(0.25, 1.0 - 0.20 * touches)
     confidence_score = min(1.0, max(0.0, float(confidence)))
 
-    score = (
-        0.45 * confidence_score
-        + 0.25 * size_score
-        + 0.15 * fill_score
-        + 0.15 * completeness_score
-    )
-    score = min(1.0, max(0.0, score))
-
     components = {
         "confidence": round(confidence_score, 4),
         "size": round(size_score, 4),
@@ -64,4 +57,24 @@ def score_asset(
         "completeness": round(completeness_score, 4),
         "area_ratio": round(area_ratio, 6),
     }
+
+    if semantic_value is None:
+        score = (
+            0.45 * confidence_score
+            + 0.25 * size_score
+            + 0.15 * fill_score
+            + 0.15 * completeness_score
+        )
+    else:
+        semantic_score = min(1.0, max(0.0, float(semantic_value)))
+        components["semantic"] = round(semantic_score, 4)
+        score = (
+            0.35 * confidence_score
+            + 0.20 * size_score
+            + 0.12 * fill_score
+            + 0.13 * completeness_score
+            + 0.20 * semantic_score
+        )
+
+    score = min(1.0, max(0.0, score))
     return round(score, 4), components
