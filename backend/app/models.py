@@ -56,6 +56,7 @@ class SceneManifest(BaseModel):
     assets: List[AssetRecord]
     preview_image: Optional[str] = None
     source_file: Optional[str] = None
+    inference_stats: dict[str, int | float] = Field(default_factory=dict)
 
 
 class SemanticExpandRequest(BaseModel):
