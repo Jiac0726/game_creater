@@ -40,6 +40,26 @@ def test_patch_asset_persists_label_category_and_notes(tmp_path: Path, monkeypat
     assert persisted.notes == "hero prop"
 
 
+def test_label_change_refreshes_semantic_asset_score(tmp_path: Path, monkeypatch) -> None:
+    workspace, manifest = _scene(tmp_path, monkeypatch)
+    store = SceneStore(workspace)
+    original = manifest.assets[0]
+
+    assert original.score_components["semantic"] == 1.0
+
+    updated = store.patch_asset(
+        manifest.scene_id,
+        original.id,
+        AssetPatch(label="abstract_light_patch_xyz"),
+    )
+
+    assert updated.score_components["semantic"] == 0.45
+    assert updated.asset_score < original.asset_score
+
+    reloaded = store.load(manifest.scene_id)
+    assert reloaded.assets[0].score_components["semantic"] == 0.45
+
+
 def test_patch_asset_rejects_empty_label(tmp_path: Path, monkeypatch) -> None:
     workspace, manifest = _scene(tmp_path, monkeypatch)
     store = SceneStore(workspace)
