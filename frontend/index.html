@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Game Creater v0.3 dev</title>
+  <title>Game Creater v0.4 dev</title>
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/semantic.css" />
   <link rel="stylesheet" href="/point_prompt.css" />
+  <link rel="stylesheet" href="/edge_refine.css" />
 </head>
 <body>
   <main class="shell">
     <header>
       <div>
         <p class="eyebrow">GAME ASSET FACTORY</p>
-        <h1>游戏素材 AI 生产工具 <span>v0.3 dev</span></h1>
+        <h1>游戏素材 AI 生产工具 <span>v0.4 dev</span></h1>
       </div>
       <div id="health" class="status">连接中…</div>
     </header>
@@ -135,6 +136,24 @@
       </div>
     </section>
 
+    <section class="card edge-panel">
+      <div class="edge-head">
+        <div>
+          <h2>BiRefNet 边缘 Alpha 精修</h2>
+          <p>可选 sidecar。只优化当前素材的透明边缘，不改变 SAM 二值 Mask 和 bbox。</p>
+        </div>
+        <span id="edgeRefineStatus" class="edge-status">检查中…</span>
+      </div>
+      <div class="edge-controls">
+        <label>
+          <span>边界半径(px)</span>
+          <input id="edgeRadius" type="number" min="1" max="24" value="6" />
+        </label>
+        <button id="edgeRefineBtn" disabled>BiRefNet 精修当前素材</button>
+        <div class="edge-note">先在 Asset Tree 选择素材。BiRefNet 只参与 SAM 边界带的软 Alpha，硬 Mask 仍作为合并、拆分和后续游戏配置依据。</div>
+      </div>
+    </section>
+
     <section class="card footerbar">
       <span id="message">先输入中文概念生成素材关键词，也可以直接上传图片并手动输入检测 Prompt。</span>
       <div class="footer-actions">
@@ -146,5 +165,6 @@
   <script src="/app.js"></script>
   <script src="/semantic.js"></script>
   <script src="/point_prompt.js"></script>
+  <script src="/edge_refine.js"></script>
 </body>
 </html>
