@@ -11,8 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.models import SceneManifest
+from app.models import AssetPatch, AssetRecord, SceneManifest
 from app.services.pipeline import AssetSplitPipeline
+from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = REPO_ROOT / "workspace"
@@ -24,7 +25,7 @@ EXPORTS.mkdir(parents=True, exist_ok=True)
 
 SCENE_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 
-app = FastAPI(title="Game Creater", version="0.1.2")
+app = FastAPI(title="Game Creater", version="0.2.0-dev")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,6 +35,7 @@ app.add_middleware(
 )
 
 pipeline = AssetSplitPipeline(WORKSPACE)
+scene_store = SceneStore(WORKSPACE)
 
 
 @app.get("/api/health")
@@ -42,7 +44,7 @@ def health() -> dict:
     return {
         "ok": True,
         "mode": pipeline.mode,
-        "version": "0.1.2",
+        "version": "0.2.0-dev",
         "model": model,
     }
 
@@ -79,10 +81,25 @@ def analyze_scene(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.patch(
+    "/api/v1/scenes/{scene_id}/assets/{asset_id}",
+    response_model=AssetRecord,
+)
+def patch_asset(scene_id: str, asset_id: str, patch: AssetPatch) -> AssetRecord:
+    _validate_scene_id(scene_id)
+    try:
+        return scene_store.patch_asset(scene_id, asset_id, patch)
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except AssetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Asset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/v1/scenes/{scene_id}/export.zip")
 def export_scene(scene_id: str) -> FileResponse:
-    if not SCENE_ID_PATTERN.fullmatch(scene_id):
-        raise HTTPException(status_code=400, detail="Invalid scene id")
+    _validate_scene_id(scene_id)
 
     scene_dir = WORKSPACE / scene_id
     if not scene_dir.is_dir() or not (scene_dir / "scene.json").is_file():
@@ -99,6 +116,11 @@ def export_scene(scene_id: str) -> FileResponse:
         media_type="application/zip",
         filename=f"game_creater_{scene_id}.zip",
     )
+
+
+def _validate_scene_id(scene_id: str) -> None:
+    if not SCENE_ID_PATTERN.fullmatch(scene_id):
+        raise HTTPException(status_code=400, detail="Invalid scene id")
 
 
 app.mount("/workspace", StaticFiles(directory=str(WORKSPACE)), name="workspace")
