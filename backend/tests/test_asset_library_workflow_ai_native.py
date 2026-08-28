@@ -18,8 +18,12 @@ def test_full_asset_library_workflow_is_ai_discoverable() -> None:
         "post.library.assets.bulk.edit",
         "post.library.assets.asset_id.versions.version.activate",
         "post.library.assets.parent_asset_id.reparent",
+        "get.library.assets.asset_id.runtime.config",
+        "patch.library.assets.asset_id.runtime.config",
+        "post.library.assets.bulk.runtime.config",
         "post.library.packs.preflight",
         "post.library.packs.export",
+        "post.library.packs.export.runtime",
         "get.library.packs.pack_id.download",
     }
     assert required.issubset(actions)
@@ -28,7 +32,7 @@ def test_full_asset_library_workflow_is_ai_discoverable() -> None:
     assert actions["delete.library.assets.asset_id.children.child_asset_id"].requires_confirmation is True
 
 
-def test_asset_workflow_tool_schemas_include_split_edit_batch_and_preflight_bodies() -> None:
+def test_asset_workflow_tool_schemas_include_split_edit_runtime_batch_and_preflight_bodies() -> None:
     tools = {
         item.function["x-game-creater-action"]: item.function
         for item in AIActionRegistry(app).tools().tools
@@ -37,6 +41,8 @@ def test_asset_workflow_tool_schemas_include_split_edit_batch_and_preflight_bodi
     split_body = tools["post.library.assets.asset_id.split"]["parameters"]["properties"]["body"]
     edit_body = tools["post.library.assets.asset_id.edit"]["parameters"]["properties"]["body"]
     bulk_edit_body = tools["post.library.assets.bulk.edit"]["parameters"]["properties"]["body"]
+    runtime_body = tools["patch.library.assets.asset_id.runtime.config"]["parameters"]["properties"]["body"]
+    runtime_export_body = tools["post.library.packs.export.runtime"]["parameters"]["properties"]["body"]
     preflight_body = tools["post.library.packs.preflight"]["parameters"]["properties"]["body"]
     export_body = tools["post.library.packs.export"]["parameters"]["properties"]["body"]
 
@@ -44,5 +50,8 @@ def test_asset_workflow_tool_schemas_include_split_edit_batch_and_preflight_bodi
     assert "operation" in edit_body["properties"]
     assert "asset_ids" in bulk_edit_body["properties"]
     assert "edit" in bulk_edit_body["properties"]
+    assert "pivot_x" in runtime_body["properties"]
+    assert "collision_mode" in runtime_body["properties"]
+    assert "include_runtime_config" in runtime_export_body["properties"]
     assert "asset_ids" in preflight_body["properties"]
     assert "engine" in export_body["properties"]
