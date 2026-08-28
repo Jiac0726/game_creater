@@ -57,29 +57,12 @@ SQLite metadata/index
 
 - Stable Global Asset ID
 - 名称 / 分类 / 子分类 / 标签 / 备注
-- Review State
-  - `needs_review`
-  - `approved`
-  - `production_ready`
-  - `in_use`
-  - `archived`
+- Review State：`needs_review / approved / production_ready / in_use / archived`
 - 收藏
 - Asset Score 搜索与筛选
 - Collection 逻辑分组
-- Asset Relations
-  - `parent_of`
-  - `variant_of`
-  - `derived_from`
-  - `part_of`
-  - `related_to`
-- Provenance 来源追踪
-  - Project
-  - Scene
-  - Source image
-  - Prompt
-  - bbox
-  - 推理模式
-  - Score components
+- Asset Relations：`parent_of / variant_of / derived_from / part_of / related_to`
+- Provenance：Project / Scene / Source / Prompt / bbox / 推理模式 / Score components
 - Asset Version 历史
 - Scene 删除素材后 Library 自动归档，不抹除历史
 - 历史 Scene 一键重新索引
@@ -94,7 +77,7 @@ v2 birefnet_refined     ← 精修后可成为 active
 v3 ai_completed         ← 默认待审核，不静默替换原始素材
 ```
 
-BiRefNet 现在不会覆盖原始 PNG；精修结果写入 `versions/` 并记录到 SQLite。IOPaint / LaMa 补全结果同样作为独立版本保存，原始素材保留。
+BiRefNet 不覆盖原始 PNG；精修结果写入 `versions/` 并记录到 SQLite。IOPaint / LaMa 补全结果同样作为独立版本保存，原始素材保留。
 
 Asset Library API：
 
@@ -160,16 +143,7 @@ POST   /api/v1/library/collections/<collection_id>/assets
 
 ### v0.4 BiRefNet 边缘精修
 
-BiRefNet 不直接替换 SAM 的对象归属判断，只参与 **SAM 边界带** 的软 Alpha：
-
-```text
-SAM 二值 Mask
-→ 膨胀 / 腐蚀得到边界带
-→ BiRefNet 预测前景 Alpha
-→ 只在边界带采用 BiRefNet
-→ SAM 核心区域保持不变
-→ 新建 birefnet_refined Asset Version
-```
+BiRefNet 不直接替换 SAM 的对象归属判断，只参与 **SAM 边界带** 的软 Alpha，并生成新的 `birefnet_refined` Asset Version。
 
 设计约束：
 
@@ -257,12 +231,8 @@ http://127.0.0.1:8000
 可直接用 Mock 模式验证：
 
 ```text
-语义联想
-→ Mock 生图
-→ 自动拆图
-→ Asset Library 自动入库
-→ 编辑 / 版本 / Collection / 批量管理
-→ Godot / Unity 导出
+语义联想 → Mock 生图 → 自动拆图 → Asset Library 自动入库
+→ 编辑 / 版本 / Collection / 批量管理 → Godot / Unity 导出
 ```
 
 ## 2. 真实生图 + GroundingDINO + SAM2
@@ -274,7 +244,7 @@ export OPENAI_API_KEY="..."
 export GAME_CREATER_OPENAI_IMAGE_MODEL="gpt-image-2"
 ```
 
-推荐 WSL2 Ubuntu / Linux + NVIDIA GPU 运行真实拆图。
+推荐 WSL2 Ubuntu / Linux + NVIDIA GPU：
 
 ```bash
 bash scripts/setup_grounded_sam2_wsl.sh
