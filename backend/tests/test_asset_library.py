@@ -6,6 +6,7 @@ from PIL import Image
 
 from app.asset_library_models import AssetRelationType, AssetReviewState, LibraryAssetPatch
 from app.services.asset_library import AssetLibrary
+from app.services.asset_library_sync import apply_library_metadata_to_scene
 from app.services.pipeline import AssetSplitPipeline
 from app.services.scene_store import SceneStore
 
@@ -55,14 +56,28 @@ def test_asset_library_metadata_tags_search_and_review_state(tmp_path: Path, mon
             subcategory="tree",
             review_state=AssetReviewState.APPROVED,
             favorite=True,
+            notes="hero vegetation",
             tags=["forest", "moss", "large", "forest"],
         ),
     )
+    apply_library_metadata_to_scene(workspace, updated)
 
     assert updated.name == "Ancient Mossy Tree"
     assert updated.review_state == AssetReviewState.APPROVED
     assert updated.favorite is True
     assert updated.tags == ["forest", "large", "moss"]
+
+    scene_asset = SceneStore(workspace).load(manifest.scene_id).assets[0]
+    assert scene_asset.library_asset_id == asset_id
+    assert scene_asset.label == "Ancient Mossy Tree"
+    assert scene_asset.category == "vegetation"
+    assert scene_asset.notes == "hero vegetation"
+
+    # A later Scene save must not revert metadata mirrored from the library.
+    scene = SceneStore(workspace).load(manifest.scene_id)
+    SceneStore(workspace).save(scene)
+    assert library.get(asset_id).name == "Ancient Mossy Tree"
+    assert library.get(asset_id).category == "vegetation"
 
     result = library.search(
         query="Mossy",
