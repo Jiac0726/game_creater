@@ -6,7 +6,6 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.asset_library_models import LibraryAssetNotFoundError
 from app.asset_workflow_maintenance_models import (
     ActivateAssetVersionResult,
     BatchAssetEditRequest,
@@ -18,6 +17,7 @@ from app.asset_workflow_maintenance_models import (
     ReparentAssetsRequest,
     ReparentAssetsResult,
 )
+from app.services.asset_library import LibraryAssetNotFoundError
 from app.services.asset_library_maintenance import AssetLibraryMaintenanceService
 from app.services.asset_library_workflow import AssetLibraryWorkflowService
 from app.services.pipeline import AssetSplitPipeline
