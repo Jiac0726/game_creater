@@ -41,6 +41,7 @@ jobs:
           node --check ../frontend/semantic.js
           node --check ../frontend/point_prompt.js
           node --check ../frontend/edge_refine.js
+          node --check ../frontend/engine_export.js
 
       - name: Check local GPU helper scripts
         run: |
