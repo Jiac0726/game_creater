@@ -8,6 +8,7 @@ Image Import
 -> Hierarchy
 -> Non-destructive Edit / Versions
 -> Runtime Config
+-> Polygon Collision / Sprite Animation / TileSet
 -> Preflight
 -> Asset Pack
 -> Generic / Godot 4 / Unity 2D delivery
@@ -29,16 +30,7 @@ Batch image import, up to 200 files:
 POST /api/v1/library/import/images
 ```
 
-Supported files: PNG/JPG/JPEG/WEBP. Imported assets receive a stable global Asset ID and three v1 resources:
-
-```text
-library_imports/<asset_id>/
-  source.png
-  mask.png
-  alpha.png
-```
-
-The initial Library version is `imported`; provenance records the original filename and import timestamp.
+Supported files: PNG/JPG/JPEG/WEBP. Imported assets receive a stable global Asset ID and versioned Image / Mask / Alpha resources.
 
 ## Split
 
@@ -46,121 +38,43 @@ The initial Library version is `imported`; provenance records the original filen
 POST /api/v1/library/assets/<asset_id>/split
 ```
 
-### Grid
+Modes:
+- `grid` for sprite sheets and atlases
+- `alpha_components` for separated transparent sprites
+- `ai_scene` using GroundingDINO + SAM2
 
-Use for sprite sheets and regular atlases:
-
-```json
-{
-  "mode": "grid",
-  "rows": 2,
-  "columns": 4
-}
-```
-
-### Alpha components
-
-Use when individual sprites are separated by transparent pixels:
-
-```json
-{
-  "mode": "alpha_components",
-  "min_area": 64
-}
-```
-
-### AI scene split
-
-Reuse GroundingDINO + SAM2:
-
-```json
-{
-  "mode": "ai_scene",
-  "prompts": ["tree", "wooden crate", "rock"]
-}
-```
-
-AI scene split produces a normal Scene and normal Asset Library entries; the generated Library assets are linked under the imported parent.
+Split results become normal Library assets and are linked under the source asset.
 
 ## Hierarchy
 
-Split children are automatically represented as:
-
 ```text
-Parent
-  parent_of -> Child
-
-Child
-  part_of -> Parent
-```
-
-Read recursively:
-
-```text
-GET /api/v1/library/assets/<asset_id>/hierarchy
-```
-
-Manual membership:
-
-```text
-POST /api/v1/library/assets/<asset_id>/children
+GET    /api/v1/library/assets/<asset_id>/hierarchy
+POST   /api/v1/library/assets/<asset_id>/children
 DELETE /api/v1/library/assets/<asset_id>/children/<child_asset_id>
+POST   /api/v1/library/assets/<parent_asset_id>/reparent
 ```
 
-Bulk reparenting:
-
-```text
-POST /api/v1/library/assets/<parent_asset_id>/reparent
-```
-
-Reparenting can remove previous parent links and rejects hierarchy cycles. Hierarchy is metadata only and never duplicates PNG files.
+Hierarchy uses `parent_of` / `part_of` relations, never duplicates PNG files and rejects cycles when reparenting.
 
 ## Asset editing and versions
 
 ```text
 POST /api/v1/library/assets/<asset_id>/edit
-```
-
-Current operations:
-- `crop`
-- `resize`
-- `trim_alpha`
-- `flip_horizontal`
-- `flip_vertical`
-- `rotate_90`
-- `pad`
-
-Batch editing:
-
-```text
 POST /api/v1/library/assets/bulk/edit
-```
-
-Editing is non-destructive:
-
-```text
-v1 imported / segmented
--> v2 edit:trim_alpha
--> v3 edit:resize
-```
-
-Image, mask and alpha are transformed together and stored under:
-
-```text
-library_versions/<asset_id>/
-```
-
-Switch the active version without deleting newer versions:
-
-```text
 POST /api/v1/library/assets/<asset_id>/versions/<version>/activate
 ```
 
-This enables rollback while preserving the complete edit history.
+Supported non-destructive edits:
+- crop
+- resize
+- trim transparent border
+- horizontal / vertical flip
+- rotate 90 degrees
+- transparent padding
+
+Image, Mask and Alpha are transformed together and every edit creates a new Library version. Activating an older version does not delete later versions.
 
 ## Runtime configuration
-
-Each Library asset can carry game-facing configuration independently from its image version:
 
 ```text
 GET   /api/v1/library/assets/<asset_id>/runtime-config
@@ -168,20 +82,48 @@ PATCH /api/v1/library/assets/<asset_id>/runtime-config
 POST  /api/v1/library/assets/bulk/runtime-config
 ```
 
-Runtime fields:
-- pivot X / Y
-- Pixels Per Unit
-- render layer
-- sorting order
-- collision mode (`none` / `box`)
-- trigger / area flag
-- gameplay tags
+Game-facing fields include Pivot, Pixels Per Unit, render layer, sorting order, collision mode (`none`, `box`, `polygon`), Trigger/Area and gameplay tags.
 
-See `docs/ASSET_RUNTIME_CONFIG.md` for the full engine-delivery contract.
+See `docs/ASSET_RUNTIME_CONFIG.md`.
+
+## Polygon Collision
+
+Generate an initial polygon from the active Mask / Alpha:
+
+```text
+POST /api/v1/library/assets/<asset_id>/collision-polygon/generate
+```
+
+Read or edit normalized polygon points:
+
+```text
+GET   /api/v1/library/assets/<asset_id>/collision-polygon
+PATCH /api/v1/library/assets/<asset_id>/collision-polygon
+```
+
+The automatic generator uses a dependency-free Mask convex hull as a stable first pass. Complex concave shapes can be edited later by a human or AI agent.
+
+## Sprite Animation
+
+```text
+GET/POST /api/v1/library/animations
+GET/PATCH /api/v1/library/animations/<animation_id>
+```
+
+Animation clips preserve ordered Asset ID frames, FPS and loop state. Duplicate frame IDs are allowed intentionally.
+
+## TileSet
+
+```text
+GET/POST /api/v1/library/tilesets
+GET/PATCH /api/v1/library/tilesets/<tileset_id>
+```
+
+TileSet definitions preserve the selected Asset IDs, tile width/height and terrain tags.
+
+See `docs/ASSET_2D_GAME_READY.md` for Polygon, Animation and TileSet engine mappings.
 
 ## Export Preflight
-
-Validate selected assets before creating a production pack:
 
 ```text
 POST /api/v1/library/packs/preflight
@@ -196,7 +138,7 @@ Checks include:
 - uncategorized assets
 - invalid active version
 
-The result separates errors and warnings. Human UI and AI agents can use the same report before export.
+Errors and warnings are returned separately.
 
 ## Asset pack export
 
@@ -212,26 +154,26 @@ Runtime-aware pack:
 POST /api/v1/library/packs/export-runtime
 ```
 
-Example:
+Game Ready pack:
 
-```json
-{
-  "name": "forest_props",
-  "asset_ids": ["asset_...", "asset_..."],
-  "engine": "godot4",
-  "include_masks": true,
-  "include_alpha": true,
-  "include_hierarchy": true,
-  "include_runtime_config": true
-}
+```text
+POST /api/v1/library/packs/export-game-ready
 ```
-
-A Collection can be supplied through `collection_id` instead of or in addition to explicit asset IDs.
 
 Download:
 
 ```text
 GET /api/v1/library/packs/<pack_id>/download
+```
+
+Animation frames and TileSet dependencies are automatically added to Game Ready exports even when not manually included in `asset_ids`.
+
+Game Ready export freezes:
+
+```text
+manifest.json
+runtime_config.json
+game_ready_2d.json
 ```
 
 Pack files are generated under the private local state directory:
@@ -240,88 +182,47 @@ Pack files are generated under the private local state directory:
 .game_creater_state/asset_packs/
 ```
 
-They are not exposed through the static `/workspace` mount.
+## Godot 4 delivery
 
-## Generic pack
-
-Contains stable IDs, active versions, dimensions, category, tags, review state, provenance and optional parent/child relationships together with PNG/Mask/Alpha files. Runtime-aware packs additionally include `runtime_config.json`.
-
-## Godot 4 pack
-
-Base files:
+Depending on export level, a package can contain:
 
 ```text
 godot4/
   assets/
-  resources/
-    <asset_id>.tres
+  resources/          # AtlasTexture .tres
+  prefabs/            # Sprite2D + runtime/collision .tscn
+  animations/         # AnimatedSprite2D + SpriteFrames .tscn
+  tilesets/           # TileSet EditorScript + definition
 ```
 
-Runtime-aware delivery adds:
+Polygon Collision is serialized as native flat-number `PackedVector2Array`. TileSet EditorScripts create native `.tres` resources using Godot 4 `TileSet` + `TileSetAtlasSource`.
+
+## Unity 2D delivery
+
+Depending on export level, a package can contain:
 
 ```text
-godot4/
-  prefabs/
-    <asset_id>.tscn
-  RUNTIME_IMPORT.md
-```
-
-Generated `.tscn` assets contain Sprite2D pivot offset, z-index and optional `StaticBody2D` or `Area2D` box collision.
-
-## Unity 2D pack
-
-Base files:
-
-```text
-unity2d/Assets/GameCreaterPack/
+Assets/GameCreaterPack/
   assets/
-  GameCreaterPack.json
+  Prefabs/
+  Animations/
+  Tiles/
+  Runtime/
   Editor/
-    GameCreaterPackImporter.cs
 ```
 
-Runtime-aware delivery adds:
-
-```text
-runtime_config.json
-Runtime/GameCreaterRuntimeMetadata.cs
-Editor/GameCreaterRuntimePrefabBuilder.cs
-```
-
-Run:
-
-```text
-Game Creater -> Build Runtime Asset Prefabs
-```
-
-The Unity Editor builder sets Sprite pivot, PPU and sorting order, creates optional `BoxCollider2D`, applies trigger state and writes Prefabs with Game Creater runtime metadata.
+Generated Editor tooling configures Sprites and runtime Prefabs, then can generate `PolygonCollider2D`, native `AnimationClip` `.anim` files and `UnityEngine.Tilemaps.Tile` assets.
 
 ## Human UI
 
-The web application exposes one Asset Library workflow containing:
-- single and batch image import
-- split mode selection
-- hierarchy inspection and reparenting
-- versioned editing and rollback
-- batch non-destructive edits
-- runtime configuration
-- pack Preflight
-- Generic / Godot / Unity pack export
+The application now exposes:
+- Asset Library Full Workflow
+- Advanced Asset Workflow
+- Runtime Config
+- 2D Game Ready Resources
 
-The existing Asset Library remains responsible for search, metadata, Collections, review state, version history and provenance.
+Together they cover import, split, hierarchy, versions, editing, collision, animation, TileSet, Preflight and engine delivery.
 
 ## AI-native contract
 
-The UI does not own any business logic. All operations go through typed backend actions, so an agent can perform the same workflow without simulating mouse clicks:
-
-```text
-AI
--> batch import
--> split
--> assign hierarchy
--> edit / rollback versions
--> configure pivot / PPU / layer / collision
--> run Preflight
--> create runtime-aware engine pack
--> download pack
-```
+The UI owns no unique business logic. Every mutation goes through typed backend APIs, so an AI agent can perform the same operations without simulating mouse clicks.
