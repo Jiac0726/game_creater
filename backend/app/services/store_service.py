@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from app.asset_library_models import AssetReviewState
 from app.services.asset_library import AssetLibrary, LibraryAssetNotFoundError
-from app.services.store_payments import StorePaymentError, StorePaymentRegistry
+from app.services.store_payments import StorePaymentRegistry
 from app.store_models import (
     StoreCart,
     StoreCartItem,
@@ -476,13 +476,17 @@ class StoreService:
                     price_minor=item["price_minor"],
                     currency=item["currency"],
                     license_type=StoreLicenseType(item["license_type"]),
+                    asset_version=item["asset_version"],
                 )
                 for item in db.execute("SELECT * FROM order_items WHERE order_id=? ORDER BY rowid", (order_id,)).fetchall()
             ]
-            entitlements = [self._entitlement_from_row(item) for item in db.execute(
-                "SELECT * FROM entitlements WHERE order_id=? AND user_id=? ORDER BY granted_at",
-                (order_id, user_id),
-            ).fetchall()]
+            entitlements = [
+                self._entitlement_from_row(item)
+                for item in db.execute(
+                    "SELECT * FROM entitlements WHERE order_id=? AND user_id=? ORDER BY granted_at",
+                    (order_id, user_id),
+                ).fetchall()
+            ]
         return StoreOrder(
             id=row["id"],
             user_id=row["user_id"],
@@ -500,10 +504,13 @@ class StoreService:
     def list_orders(self, *, user_id: str | None = None) -> list[StoreOrder]:
         user_id = user_id or self.local_user
         with self._connect() as db:
-            ids = [row["id"] for row in db.execute(
-                "SELECT id FROM orders WHERE user_id=? ORDER BY created_at DESC",
-                (user_id,),
-            ).fetchall()]
+            ids = [
+                row["id"]
+                for row in db.execute(
+                    "SELECT id FROM orders WHERE user_id=? ORDER BY created_at DESC",
+                    (user_id,),
+                ).fetchall()
+            ]
         return [self.get_order(order_id, user_id=user_id) for order_id in ids]
 
     def list_entitlements(self, *, user_id: str | None = None) -> list[StoreEntitlement]:
