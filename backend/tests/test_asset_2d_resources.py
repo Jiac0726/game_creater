@@ -128,10 +128,13 @@ def test_game_ready_godot_pack_contains_polygon_animation_and_tileset(tmp_path: 
         assert f"godot4/tilesets/build_{tileset.id}.gd" in names
         prefab = archive.read(f"godot4/prefabs/{a.id}.tscn").decode("utf-8")
         assert "CollisionPolygon2D" in prefab
-        assert "PackedVector2Array" in prefab
+        polygon_line = next(line for line in prefab.splitlines() if line.startswith("polygon = PackedVector2Array"))
+        assert "Vector2(" not in polygon_line
+        assert polygon_line.count(",") >= 5
         animation_scene = archive.read(f"godot4/animations/{animation.id}.tscn").decode("utf-8")
         assert "AnimatedSprite2D" in animation_scene
         assert "SpriteFrames" in animation_scene
+        assert '"loop": 1' in animation_scene
         doc = json.loads(archive.read("game_ready_2d.json"))
         assert doc["animations"][0]["frame_asset_ids"] == [a.id, b.id]
 
