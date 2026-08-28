@@ -43,6 +43,16 @@ class ProjectStore:
             raise ProjectNotFoundError(project_id)
         return ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
 
+    def find_by_scene(self, scene_id: str) -> ProjectRecord | None:
+        for path in sorted(self.projects_root.glob("*/project.json")):
+            try:
+                record = ProjectRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if record.scene_id == scene_id:
+                return record
+        return None
+
     def save(self, record: ProjectRecord) -> ProjectRecord:
         record.updated_at = utc_now()
         path = self.project_dir(record.project_id) / "project.json"
