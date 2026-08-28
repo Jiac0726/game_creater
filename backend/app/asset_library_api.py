@@ -14,6 +14,7 @@ from app.asset_library_models import (
     LibraryAssetPatch,
     LibraryAssetVersion,
 )
+from app.models import SceneManifest
 from app.services.asset_library import (
     AssetLibrary,
     CollectionNotFoundError,
@@ -24,11 +25,38 @@ from app.services.asset_library_sync import apply_library_metadata_to_scene
 
 def build_asset_library_router(workspace: str | Path) -> APIRouter:
     router = APIRouter(prefix="/library", tags=["asset-library"])
-    library = AssetLibrary(workspace)
+    workspace_path = Path(workspace)
+    library = AssetLibrary(workspace_path)
 
     @router.get("/stats")
     def stats():
         return library.stats()
+
+    @router.post("/reindex")
+    def reindex_existing_scenes() -> dict:
+        indexed_scenes = 0
+        indexed_assets = 0
+        skipped: list[str] = []
+        for scene_dir in sorted(workspace_path.iterdir()):
+            if not scene_dir.is_dir() or scene_dir.name == "projects":
+                continue
+            manifest_path = scene_dir / "scene.json"
+            if not manifest_path.is_file():
+                continue
+            try:
+                manifest = SceneManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+                library.sync_scene(manifest)
+                manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+                indexed_scenes += 1
+                indexed_assets += len(manifest.assets)
+            except Exception as exc:
+                skipped.append(f"{scene_dir.name}: {exc}")
+        return {
+            "ok": True,
+            "indexed_scenes": indexed_scenes,
+            "indexed_assets": indexed_assets,
+            "skipped": skipped,
+        }
 
     @router.get("/assets", response_model=AssetSearchResult)
     def search_assets(
@@ -68,7 +96,7 @@ def build_asset_library_router(workspace: str | Path) -> APIRouter:
     def patch_asset(asset_id: str, patch: LibraryAssetPatch) -> LibraryAsset:
         try:
             updated = library.patch(asset_id, patch)
-            apply_library_metadata_to_scene(workspace, updated)
+            apply_library_metadata_to_scene(workspace_path, updated)
             return updated
         except LibraryAssetNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Library asset not found") from exc
@@ -99,7 +127,7 @@ def build_asset_library_router(workspace: str | Path) -> APIRouter:
                 if request.favorite is not None:
                     patch_data["favorite"] = request.favorite
                 updated = library.patch(asset_id, LibraryAssetPatch(**patch_data))
-                apply_library_metadata_to_scene(workspace, updated)
+                apply_library_metadata_to_scene(workspace_path, updated)
                 updated_ids.append(asset_id)
             return {"ok": True, "updated": updated_ids, "count": len(updated_ids)}
         except LibraryAssetNotFoundError as exc:
