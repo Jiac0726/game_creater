@@ -74,7 +74,7 @@ class AIActionRegistry:
     def _action_id(method: str, path: str) -> str:
         clean = path.removeprefix("/api/v1/")
         clean = re.sub(r"[{}]", "", clean)
-        clean = re.sub(r"[^a-zA-Z0-9]+", ".", clean).strip(".").lower()
+        clean = re.sub(r"[^a-zA-Z0-9_]+", ".", clean).strip(".").lower()
         return f"{method.lower()}.{clean}"
 
     @staticmethod
