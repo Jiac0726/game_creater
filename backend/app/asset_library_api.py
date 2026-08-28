@@ -21,7 +21,7 @@ from app.services.asset_library import (
 
 
 def build_asset_library_router(workspace: str | Path) -> APIRouter:
-    router = APIRouter(prefix="/api/v1/library", tags=["asset-library"])
+    router = APIRouter(prefix="/library", tags=["asset-library"])
     library = AssetLibrary(workspace)
 
     @router.get("/stats")
