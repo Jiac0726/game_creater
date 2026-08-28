@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime workspace
+workspace/*
+!workspace/.gitkeep
+validation_output/
+.game_creater_state/
+
+# Local AI model weights
+model_weights/*
+!model_weights/.gitkeep
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.onnx
+
+# Logs
+*.log

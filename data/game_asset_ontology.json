@@ -1,0 +1,280 @@
+{
+  "group_labels": {
+    "buildings": "建筑",
+    "structures": "结构",
+    "props": "道具",
+    "vegetation": "植被",
+    "terrain": "地形",
+    "vehicles": "载具",
+    "creatures": "生物",
+    "effects": "环境效果",
+    "materials": "材质"
+  },
+  "concepts": {
+    "forest": {
+      "label_zh": "森林",
+      "aliases": ["森林", "树林", "林地", "forest", "woods"],
+      "groups": {
+        "vegetation": [
+          {"zh": "树木", "en": "tree"}, {"zh": "灌木", "en": "bush"},
+          {"zh": "草丛", "en": "grass clump"}, {"zh": "蕨类", "en": "fern"},
+          {"zh": "藤蔓", "en": "vine"}, {"zh": "苔藓", "en": "moss"},
+          {"zh": "蘑菇", "en": "mushroom"}, {"zh": "野花", "en": "wildflower"},
+          {"zh": "树桩", "en": "tree stump"}, {"zh": "倒木", "en": "fallen log"}
+        ],
+        "terrain": [
+          {"zh": "岩石", "en": "rock"}, {"zh": "巨石", "en": "boulder"},
+          {"zh": "泥土地面", "en": "dirt ground"}, {"zh": "山坡", "en": "slope"},
+          {"zh": "溪流", "en": "stream"}, {"zh": "水潭", "en": "pond"}
+        ],
+        "structures": [
+          {"zh": "木桥", "en": "wooden bridge"}, {"zh": "林中小屋", "en": "forest cabin"},
+          {"zh": "木栅栏", "en": "wooden fence"}, {"zh": "小神龛", "en": "small shrine"}
+        ],
+        "props": [
+          {"zh": "木路牌", "en": "wooden sign"}, {"zh": "灯笼", "en": "lantern"},
+          {"zh": "木箱", "en": "wooden crate"}
+        ],
+        "effects": [
+          {"zh": "薄雾", "en": "ground fog"}, {"zh": "萤火虫", "en": "fireflies"},
+          {"zh": "阳光光束", "en": "sunbeam"}, {"zh": "漂浮孢子", "en": "floating spores"}
+        ],
+        "materials": [
+          {"zh": "树皮", "en": "tree bark"}, {"zh": "苔藓石", "en": "mossy stone"},
+          {"zh": "湿润泥土", "en": "wet soil"}
+        ]
+      }
+    },
+    "subway_station": {
+      "label_zh": "地铁站",
+      "aliases": ["地铁站", "地铁", "地下车站", "subway station", "metro station"],
+      "groups": {
+        "structures": [
+          {"zh": "站台", "en": "subway platform"}, {"zh": "轨道", "en": "rail track"},
+          {"zh": "隧道", "en": "subway tunnel"}, {"zh": "楼梯", "en": "staircase"},
+          {"zh": "扶梯", "en": "escalator"}, {"zh": "立柱", "en": "concrete column"},
+          {"zh": "通风井", "en": "ventilation shaft"}
+        ],
+        "vehicles": [{"zh": "地铁列车", "en": "subway train"}],
+        "props": [
+          {"zh": "闸机", "en": "ticket gate"}, {"zh": "自动售票机", "en": "ticket machine"},
+          {"zh": "长椅", "en": "station bench"}, {"zh": "垃圾桶", "en": "trash can"},
+          {"zh": "灭火器", "en": "fire extinguisher"}, {"zh": "警示牌", "en": "warning sign"},
+          {"zh": "路障", "en": "barrier"}, {"zh": "电缆", "en": "cable"},
+          {"zh": "灯管", "en": "fluorescent light"}, {"zh": "广告灯箱", "en": "advertisement lightbox"}
+        ],
+        "effects": [
+          {"zh": "灰尘", "en": "dust"}, {"zh": "滴水", "en": "water drip"},
+          {"zh": "电火花", "en": "electric sparks"}, {"zh": "地下薄雾", "en": "underground fog"}
+        ],
+        "materials": [
+          {"zh": "瓷砖", "en": "ceramic tile"}, {"zh": "混凝土", "en": "concrete"},
+          {"zh": "金属护栏", "en": "metal railing"}
+        ]
+      }
+    },
+    "factory": {
+      "label_zh": "工厂",
+      "aliases": ["工厂", "厂房", "工业区", "factory", "industrial plant"],
+      "groups": {
+        "buildings": [{"zh": "工业厂房", "en": "industrial building"}],
+        "structures": [
+          {"zh": "烟囱", "en": "chimney"}, {"zh": "工业管道", "en": "industrial pipe"},
+          {"zh": "铁梯", "en": "metal staircase"}, {"zh": "检修平台", "en": "metal catwalk"}
+        ],
+        "props": [
+          {"zh": "锅炉", "en": "boiler"}, {"zh": "储罐", "en": "storage tank"},
+          {"zh": "工业机器", "en": "industrial machine"}, {"zh": "油桶", "en": "oil barrel"},
+          {"zh": "木箱", "en": "wooden crate"}, {"zh": "工具箱", "en": "toolbox"},
+          {"zh": "警示牌", "en": "warning sign"}, {"zh": "阀门", "en": "industrial valve"}
+        ],
+        "effects": [
+          {"zh": "蒸汽", "en": "steam"}, {"zh": "烟尘", "en": "industrial smoke"},
+          {"zh": "火花", "en": "sparks"}
+        ],
+        "materials": [
+          {"zh": "钢板", "en": "steel plate"}, {"zh": "生铁", "en": "cast iron"},
+          {"zh": "混凝土地面", "en": "concrete floor"}
+        ]
+      }
+    },
+    "fishing_village": {
+      "label_zh": "海边渔村",
+      "aliases": ["渔村", "海边渔村", "海港村庄", "fishing village", "coastal village"],
+      "groups": {
+        "buildings": [
+          {"zh": "木屋", "en": "wooden house"}, {"zh": "渔具店", "en": "fishing shop"},
+          {"zh": "仓库", "en": "harbor warehouse"}, {"zh": "灯塔", "en": "lighthouse"}
+        ],
+        "structures": [
+          {"zh": "木码头", "en": "wooden pier"}, {"zh": "防波堤", "en": "breakwater"}
+        ],
+        "vehicles": [{"zh": "小渔船", "en": "fishing boat"}],
+        "props": [
+          {"zh": "渔网", "en": "fishing net"}, {"zh": "绳索", "en": "rope"},
+          {"zh": "浮标", "en": "buoy"}, {"zh": "鱼筐", "en": "fish basket"},
+          {"zh": "船锚", "en": "anchor"}, {"zh": "木桶", "en": "wooden barrel"},
+          {"zh": "木箱", "en": "wooden crate"}, {"zh": "救生圈", "en": "life ring"},
+          {"zh": "木牌", "en": "wooden sign"}
+        ],
+        "terrain": [
+          {"zh": "海边岩石", "en": "coastal rock"}, {"zh": "沙滩", "en": "beach sand"},
+          {"zh": "海草", "en": "seaweed"}
+        ],
+        "creatures": [{"zh": "海鸥", "en": "seagull"}],
+        "effects": [{"zh": "海雾", "en": "sea mist"}, {"zh": "海浪", "en": "ocean waves"}]
+      }
+    },
+    "cave": {
+      "label_zh": "洞穴",
+      "aliases": ["洞穴", "山洞", "地穴", "cave", "cavern"],
+      "groups": {
+        "terrain": [
+          {"zh": "钟乳石", "en": "stalactite"}, {"zh": "石笋", "en": "stalagmite"},
+          {"zh": "洞穴岩石", "en": "cave rock"}, {"zh": "巨石", "en": "boulder"},
+          {"zh": "地下水潭", "en": "underground pool"}
+        ],
+        "props": [
+          {"zh": "火把", "en": "torch"}, {"zh": "矿车", "en": "mine cart"},
+          {"zh": "木箱", "en": "wooden crate"}, {"zh": "水晶", "en": "crystal"}
+        ],
+        "structures": [{"zh": "绳桥", "en": "rope bridge"}, {"zh": "木支架", "en": "timber support"}],
+        "vegetation": [{"zh": "洞穴蘑菇", "en": "cave mushroom"}, {"zh": "苔藓", "en": "moss"}],
+        "effects": [{"zh": "洞穴薄雾", "en": "cave fog"}, {"zh": "水滴", "en": "water drip"}]
+      }
+    },
+    "castle": {
+      "label_zh": "城堡",
+      "aliases": ["城堡", "要塞", "堡垒", "castle", "fortress"],
+      "groups": {
+        "buildings": [{"zh": "主堡", "en": "castle keep"}],
+        "structures": [
+          {"zh": "城墙", "en": "castle wall"}, {"zh": "塔楼", "en": "castle tower"},
+          {"zh": "城门", "en": "castle gate"}, {"zh": "吊桥", "en": "drawbridge"},
+          {"zh": "垛口", "en": "battlement"}, {"zh": "石拱门", "en": "stone arch"}
+        ],
+        "props": [
+          {"zh": "旗帜", "en": "banner"}, {"zh": "火把", "en": "wall torch"},
+          {"zh": "木桶", "en": "wooden barrel"}, {"zh": "木箱", "en": "wooden crate"},
+          {"zh": "武器架", "en": "weapon rack"}, {"zh": "雕像", "en": "stone statue"}
+        ],
+        "materials": [{"zh": "石砖", "en": "stone brick"}, {"zh": "锻铁", "en": "wrought iron"}]
+      }
+    },
+    "tavern": {
+      "label_zh": "酒馆",
+      "aliases": ["酒馆", "旅店", "客栈", "tavern", "inn"],
+      "groups": {
+        "structures": [{"zh": "吧台", "en": "bar counter"}, {"zh": "壁炉", "en": "fireplace"}],
+        "props": [
+          {"zh": "木桌", "en": "wooden table"}, {"zh": "木椅", "en": "wooden chair"},
+          {"zh": "酒桶", "en": "wine barrel"}, {"zh": "酒杯", "en": "mug"},
+          {"zh": "酒瓶", "en": "bottle"}, {"zh": "蜡烛", "en": "candle"},
+          {"zh": "吊灯", "en": "chandelier"}, {"zh": "墙面招牌", "en": "wall sign"},
+          {"zh": "货架", "en": "wooden shelf"}
+        ],
+        "materials": [{"zh": "旧木板", "en": "aged wood"}, {"zh": "石地板", "en": "stone floor"}],
+        "effects": [{"zh": "炉火烟雾", "en": "fireplace smoke"}]
+      }
+    },
+    "city_alley": {
+      "label_zh": "城市小巷",
+      "aliases": ["小巷", "街巷", "城市巷子", "alley", "city alley"],
+      "groups": {
+        "buildings": [{"zh": "建筑立面", "en": "building facade"}],
+        "structures": [
+          {"zh": "门", "en": "door"}, {"zh": "窗户", "en": "window"},
+          {"zh": "消防梯", "en": "fire escape"}, {"zh": "排水管", "en": "drain pipe"}
+        ],
+        "props": [
+          {"zh": "垃圾箱", "en": "dumpster"}, {"zh": "垃圾袋", "en": "trash bag"},
+          {"zh": "自动售货机", "en": "vending machine"}, {"zh": "街道路牌", "en": "street sign"},
+          {"zh": "路灯", "en": "street light"}, {"zh": "自行车", "en": "bicycle"},
+          {"zh": "空调外机", "en": "air conditioner unit"}, {"zh": "海报", "en": "wall poster"}
+        ],
+        "terrain": [{"zh": "积水", "en": "puddle"}],
+        "effects": [{"zh": "蒸汽", "en": "street steam"}, {"zh": "薄雾", "en": "alley mist"}]
+      }
+    }
+  },
+  "modifiers": {
+    "abandoned": {
+      "label_zh": "废弃",
+      "aliases": ["废弃", "荒废", "废墟", "abandoned", "ruined"],
+      "states": [
+        {"zh": "破损", "en": "broken"}, {"zh": "生锈", "en": "rusty"},
+        {"zh": "长满苔藓的", "en": "moss-covered"}
+      ],
+      "additions": {
+        "props": [
+          {"zh": "碎玻璃", "en": "broken glass"}, {"zh": "瓦砾", "en": "rubble"},
+          {"zh": "废弃路障", "en": "abandoned barrier"}
+        ],
+        "effects": [{"zh": "漂浮灰尘", "en": "floating dust"}, {"zh": "漏水", "en": "water leak"}]
+      }
+    },
+    "magic": {
+      "label_zh": "魔法",
+      "aliases": ["魔法", "奇幻", "附魔", "magic", "fantasy"],
+      "states": [
+        {"zh": "发光的", "en": "glowing"}, {"zh": "附魔的", "en": "enchanted"}
+      ],
+      "additions": {
+        "props": [
+          {"zh": "魔法水晶", "en": "magic crystal"}, {"zh": "符文石", "en": "rune stone"},
+          {"zh": "魔法灯笼", "en": "magic lantern"}
+        ],
+        "effects": [
+          {"zh": "魔法粒子", "en": "magic particles"}, {"zh": "漂浮光点", "en": "floating lights"}
+        ]
+      }
+    },
+    "cyberpunk": {
+      "label_zh": "赛博朋克",
+      "aliases": ["赛博朋克", "赛博", "cyberpunk", "neon city"],
+      "states": [{"zh": "霓虹照明的", "en": "neon-lit"}],
+      "additions": {
+        "props": [
+          {"zh": "霓虹招牌", "en": "neon sign"}, {"zh": "全息广告", "en": "holographic billboard"},
+          {"zh": "街边终端", "en": "street terminal"}, {"zh": "电缆束", "en": "cable bundle"}
+        ],
+        "effects": [
+          {"zh": "霓虹反光", "en": "neon reflection"}, {"zh": "蒸汽", "en": "steam"},
+          {"zh": "电火花", "en": "electric sparks"}
+        ]
+      }
+    },
+    "medieval": {
+      "label_zh": "中世纪",
+      "aliases": ["中世纪", "中古", "medieval"],
+      "states": [{"zh": "风化的", "en": "weathered"}],
+      "additions": {
+        "props": [
+          {"zh": "火把", "en": "torch"}, {"zh": "木桶", "en": "wooden barrel"},
+          {"zh": "木箱", "en": "wooden crate"}, {"zh": "木推车", "en": "wooden cart"},
+          {"zh": "布旗", "en": "cloth banner"}
+        ]
+      }
+    },
+    "rainy": {
+      "label_zh": "雨天",
+      "aliases": ["雨夜", "下雨", "雨天", "rainy", "rain"],
+      "states": [{"zh": "湿润的", "en": "wet"}],
+      "additions": {
+        "terrain": [{"zh": "积水", "en": "puddle"}],
+        "effects": [{"zh": "雨幕", "en": "rain"}, {"zh": "水面反光", "en": "wet reflection"}]
+      }
+    },
+    "snow": {
+      "label_zh": "雪地",
+      "aliases": ["雪地", "冰雪", "下雪", "snow", "snowy"],
+      "states": [
+        {"zh": "积雪覆盖的", "en": "snow-covered"}, {"zh": "结冰的", "en": "frozen"}
+      ],
+      "additions": {
+        "terrain": [{"zh": "积雪", "en": "snow pile"}, {"zh": "冰面", "en": "ice patch"}],
+        "effects": [{"zh": "飘雪", "en": "falling snow"}, {"zh": "霜冻", "en": "frost"}]
+      }
+    }
+  }
+}

@@ -1,0 +1,61 @@
+name: core-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-core-workflow:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run backend tests
+        env:
+          GAME_CREATER_MODE: mock
+          PYTHONPATH: .
+        run: python -m pytest -q
+
+      - name: Check frontend JavaScript syntax
+        run: |
+          node --check ../frontend/app.js
+          node --check ../frontend/semantic.js
+          node --check ../frontend/point_prompt.js
+          node --check ../frontend/edge_refine.js
+          node --check ../frontend/engine_export.js
+          node --check ../frontend/workflow.js
+          node --check ../frontend/completion.js
+          node --check ../frontend/asset_library.js
+          node --check ../frontend/store.js
+
+      - name: Check local AI helper scripts
+        run: |
+          bash -n ../scripts/setup_grounded_sam2_wsl.sh
+          bash -n ../scripts/start_grounded_sam2_wsl.sh
+          bash -n ../scripts/setup_birefnet_sidecar.sh
+          bash -n ../scripts/start_birefnet_sidecar.sh
+          bash -n ../scripts/setup_iopaint_sidecar.sh
+          bash -n ../scripts/start_iopaint_sidecar.sh
+          python ../scripts/verify_grounded_sam2_env.py --help >/dev/null
+          python ../scripts/smoke_test_grounded_sam2.py --help >/dev/null
+          python ../scripts/validate_scene_output.py --help >/dev/null
+          python -m py_compile ../birefnet_worker/server.py

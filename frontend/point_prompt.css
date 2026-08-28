@@ -1,0 +1,26 @@
+.sam-panel { margin-top: 16px; padding: 14px 16px; display: grid; gap: 12px; }
+.sam-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.sam-head h2 { margin: 0; font-size: 14px; }
+.sam-head p { margin: 4px 0 0; color: #77859a; font-size: 11px; }
+.sam-controls { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto auto; gap: 10px; align-items: end; }
+.sam-controls label { display: grid; gap: 6px; color: #8492a6; font-size: 11px; }
+.sam-controls input { width: 100%; border: 1px solid #2a3547; border-radius: 8px; background: #0b1018; color: #edf4ff; padding: 9px 10px; }
+.sam-actions, .sam-polarity { display: flex; gap: 7px; flex-wrap: wrap; }
+.sam-panel button { border: 1px solid #30415a; border-radius: 8px; background: #111925; color: #cfe6ff; padding: 9px 10px; cursor: pointer; }
+.sam-panel button:hover:not(:disabled) { background: #172335; }
+.sam-panel button:disabled { opacity: .42; cursor: not-allowed; }
+.sam-panel button.active { border-color: #4a9ff5; background: #17304a; }
+#samPositiveBtn.active { border-color: #3f9a63; color: #bdf1ce; background: #163021; }
+#samNegativeBtn.active { border-color: #9a4a4a; color: #ffc8c8; background: #331919; }
+#samRunBtn { border-color: #285f42; color: #bff4d2; }
+#samCancelBtn { color: #a7b3c5; }
+.sam-point-status { color: #718198; font-size: 11px; }
+.sam-point-status.error { color: #ffb7b7; }
+.viewer-stage { position: relative; }
+#pointPromptCanvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 6; pointer-events: none; cursor: crosshair; }
+#pointPromptCanvas.active { pointer-events: auto; }
+
+@media (max-width: 980px) {
+  .sam-controls { grid-template-columns: 1fr; }
+  .sam-actions, .sam-polarity { width: 100%; }
+}
