@@ -104,17 +104,18 @@ class Asset2DGameReadyPackService:
             height = max(1, int(asset.get("height") or 1))
             px = float(polygon["pivot_x"])
             py = float(polygon["pivot_y"])
-            vectors = ", ".join(
-                f"Vector2({(point['x'] - px) * width:.4f}, {(point['y'] - py) * height:.4f})"
-                for point in polygon["points"]
-            )
+            flat_values: list[str] = []
+            for point in polygon["points"]:
+                flat_values.append(f"{(point['x'] - px) * width:.4f}")
+                flat_values.append(f"{(point['y'] - py) * height:.4f}")
+            packed = ", ".join(flat_values)
             body_type = "Area2D" if polygon["is_trigger"] else "StaticBody2D"
             text = path.read_text(encoding="utf-8")
             text += (
                 "\n"
                 f'[node name="CollisionBody" type="{body_type}" parent="."]\n\n'
                 '[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="CollisionBody"]\n'
-                f"polygon = PackedVector2Array({vectors})\n"
+                f"polygon = PackedVector2Array({packed})\n"
             )
             path.write_text(text, encoding="utf-8")
 
@@ -139,7 +140,7 @@ class Asset2DGameReadyPackService:
                 '[sub_resource type="SpriteFrames" id="SpriteFrames_main"]',
                 "animations = [{",
                 f'"frames": [{frame_entries}],',
-                f'"loop": {str(clip.loop).lower()},',
+                f'"loop": {1 if clip.loop else 0},',
                 '"name": &"default",',
                 f'"speed": {clip.fps:.6f}',
                 "}]",
