@@ -33,6 +33,7 @@ from app.services.pipeline import AssetSplitPipeline
 from app.services.scene_recommender import SceneRecommender
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
 from app.services.semantic_engine import SemanticEngine
+from app.services.unity_exporter import UnityExporter
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = REPO_ROOT / "workspace"
@@ -45,7 +46,7 @@ EXPORTS.mkdir(parents=True, exist_ok=True)
 SCENE_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 EDGE_REFINER_MODE = os.getenv("GAME_CREATER_EDGE_REFINER", "none").strip().lower()
 
-app = FastAPI(title="Game Creater", version="0.5.0-dev")
+app = FastAPI(title="Game Creater", version="0.6.0-dev")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -61,6 +62,7 @@ semantic_engine = SemanticEngine()
 scene_recommender = SceneRecommender()
 edge_refiner = EdgeRefinementService(WORKSPACE)
 godot_exporter = GodotExporter(WORKSPACE, EXPORTS)
+unity_exporter = UnityExporter(WORKSPACE, EXPORTS)
 
 
 def _edge_status() -> dict:
@@ -76,7 +78,7 @@ def health() -> dict:
     return {
         "ok": True,
         "mode": pipeline.mode,
-        "version": "0.5.0-dev",
+        "version": "0.6.0-dev",
         "model": model,
         "semantic": {
             "ready": True,
@@ -88,7 +90,7 @@ def health() -> dict:
             "enabled": EDGE_REFINER_MODE == "birefnet_sidecar",
             "mode": EDGE_REFINER_MODE,
         },
-        "engine_export": {"godot4": True},
+        "engine_export": {"godot4": True, "unity2d": True},
     }
 
 
@@ -373,6 +375,23 @@ def export_scene_godot(scene_id: str) -> FileResponse:
         path=archive_path,
         media_type="application/zip",
         filename=f"game_creater_{scene_id}_godot4.zip",
+    )
+
+
+@app.get("/api/v1/scenes/{scene_id}/export/unity.zip")
+def export_scene_unity(scene_id: str) -> FileResponse:
+    _validate_scene_id(scene_id)
+    try:
+        archive_path = unity_exporter.export(scene_id)
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return FileResponse(
+        path=archive_path,
+        media_type="application/zip",
+        filename=f"game_creater_{scene_id}_unity2d.zip",
     )
 
 
