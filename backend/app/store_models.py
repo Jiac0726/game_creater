@@ -101,6 +101,7 @@ class StoreOrderItem(BaseModel):
     price_minor: int
     currency: str
     license_type: StoreLicenseType
+    asset_version: int
 
 
 class StoreEntitlement(BaseModel):
