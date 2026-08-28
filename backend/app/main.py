@@ -34,6 +34,7 @@ from app.services.scene_recommender import SceneRecommender
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
 from app.services.semantic_engine import SemanticEngine
 from app.services.unity_exporter import UnityExporter
+from app.workflow_api import build_workflow_router
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = REPO_ROOT / "workspace"
@@ -46,7 +47,7 @@ EXPORTS.mkdir(parents=True, exist_ok=True)
 SCENE_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 EDGE_REFINER_MODE = os.getenv("GAME_CREATER_EDGE_REFINER", "none").strip().lower()
 
-app = FastAPI(title="Game Creater", version="0.6.0-dev")
+app = FastAPI(title="Game Creater", version="1.0.0-dev")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -63,6 +64,7 @@ scene_recommender = SceneRecommender()
 edge_refiner = EdgeRefinementService(WORKSPACE)
 godot_exporter = GodotExporter(WORKSPACE, EXPORTS)
 unity_exporter = UnityExporter(WORKSPACE, EXPORTS)
+app.include_router(build_workflow_router(WORKSPACE, pipeline))
 
 
 def _edge_status() -> dict:
@@ -78,7 +80,7 @@ def health() -> dict:
     return {
         "ok": True,
         "mode": pipeline.mode,
-        "version": "0.6.0-dev",
+        "version": "1.0.0-dev",
         "model": model,
         "semantic": {
             "ready": True,
@@ -90,6 +92,7 @@ def health() -> dict:
             "enabled": EDGE_REFINER_MODE == "birefnet_sidecar",
             "mode": EDGE_REFINER_MODE,
         },
+        "generation_workflow": True,
         "engine_export": {"godot4": True, "unity2d": True},
     }
 
@@ -180,7 +183,6 @@ def point_segment_asset(
     scene_id: str,
     request: AssetPointSegmentRequest,
 ) -> SceneManifest:
-    """Create or refine one asset from positive/negative SAM2 point prompts."""
     _validate_scene_id(scene_id)
     if pipeline.mode not in {"grounded_sam2", "grounded_sam2_local"}:
         raise HTTPException(
@@ -343,7 +345,6 @@ def split_asset(
 @app.get("/api/v1/scenes/{scene_id}/export.zip")
 def export_scene(scene_id: str) -> FileResponse:
     _validate_scene_id(scene_id)
-
     scene_dir = WORKSPACE / scene_id
     if not scene_dir.is_dir() or not (scene_dir / "scene.json").is_file():
         raise HTTPException(status_code=404, detail="Scene not found")
@@ -370,7 +371,6 @@ def export_scene_godot(scene_id: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Scene not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
     return FileResponse(
         path=archive_path,
         media_type="application/zip",
@@ -387,7 +387,6 @@ def export_scene_unity(scene_id: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Scene not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
     return FileResponse(
         path=archive_path,
         media_type="application/zip",
