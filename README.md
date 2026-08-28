@@ -1,6 +1,6 @@
 # Game Creater
 
-本地优先的 AI 游戏素材生产与管理工具。
+本地优先的 AI 游戏素材生产、管理与交易工具。
 
 ```text
 中文场景概念
@@ -17,14 +17,16 @@
 → SAM 正点 / 负点添加或修正 Mask
 → 可选 BiRefNet 边缘 Alpha 精修（版本化）
 → 可选 IOPaint / LaMa 局部补全（版本化、待审核）
+→ Asset Store 上架 / 授权 / 下载
 → Scene Layout
 → Godot 4 / Unity 2D 导出
 ```
 
-语义联想、Asset Library、Mock 生图/拆图流程可完全离线运行。真实生图可接 OpenAI Image API；真实拆图使用本地 GroundingDINO + SAM2；BiRefNet 与 IOPaint 都作为可替换本地 sidecar。
+语义联想、Asset Library、Asset Store Mock 交易和 Mock 生图/拆图流程可完全离线运行。真实生图可接 OpenAI Image API；真实拆图使用本地 GroundingDINO + SAM2；BiRefNet 与 IOPaint 都作为可替换本地 sidecar。
 
 完整 v1 流程文档：`docs/FULL_WORKFLOW.md`  
-Asset Library 文档：`docs/ASSET_LIBRARY.md`
+Asset Library 文档：`docs/ASSET_LIBRARY.md`  
+Asset Store 文档：`docs/ASSET_STORE.md`
 
 ## 当前能力
 
@@ -73,140 +75,65 @@ SQLite metadata/index
 
 ```text
 v1 segmented
-v2 birefnet_refined     ← 精修后可成为 active
-v3 ai_completed         ← 默认待审核，不静默替换原始素材
+v2 birefnet_refined
+v3 ai_completed (默认不自动激活)
 ```
 
-BiRefNet 不覆盖原始 PNG；精修结果写入 `versions/` 并记录到 SQLite。IOPaint / LaMa 补全结果同样作为独立版本保存，原始素材保留。
+BiRefNet 与 AI 补全不会再直接覆盖最初的拆图历史。
 
-Asset Library API：
+### v1.1 Asset Store · 游戏素材商店
+
+Asset Store 直接建立在 Asset Library 之上，不复制素材文件。
 
 ```text
-GET    /api/v1/library/stats
-POST   /api/v1/library/reindex
-GET    /api/v1/library/assets
-GET    /api/v1/library/assets/<asset_id>
-PATCH  /api/v1/library/assets/<asset_id>
-POST   /api/v1/library/assets/bulk
-GET    /api/v1/library/assets/<asset_id>/versions
-GET    /api/v1/library/assets/<asset_id>/relations
-POST   /api/v1/library/assets/<asset_id>/relations
-GET    /api/v1/library/collections
-POST   /api/v1/library/collections
-POST   /api/v1/library/collections/<collection_id>/assets
+Asset Library
+→ Review / Production Ready
+→ Store Listing
+→ Storefront
+→ Cart
+→ Checkout Provider
+→ Order
+→ Entitlement
+→ Version-locked ZIP Download
 ```
 
-详细说明：`docs/ASSET_LIBRARY.md`。
+当前支持：
 
-### v0.1 图片 AI 拆解
+- `approved / production_ready / in_use` 素材公开上架
+- `needs_review / archived` 禁止直接公开售卖，可保存 Draft
+- Draft / Published / Archived 商品状态
+- Personal / Commercial / Extended 三档授权
+- 免费与付费定价
+- 商品搜索、分类、授权类型、免费/精选筛选
+- 创作者中心：从当前 Asset Library 选中素材直接上架
+- 购物车
+- 可替换 `StorePaymentProvider`
+- Mock Checkout：只用于本地交易流程验证，不会真实收款
+- Order / Order Items
+- Entitlement 授权凭证
+- 购买时冻结 Asset Version
+- 已购素材库
+- Entitlement-gated 下载
+- 下载 ZIP：`asset.png / mask.png / alpha.png / metadata.json / LICENSE.txt`
+- 销量 / 下载量 / 商店统计
+- 商店私有状态保存到 `.game_creater_state/store.db`，不放在静态 `/workspace` 下
 
-- PNG / JPG / WEBP 场景上传
-- GroundingDINO 开放词汇检测
-- SAM2 / SAM2.1 分割
-- bbox confidence + IoU 去重
-- Mask IoU 二次去重
-- `scene.json -> inference_stats` 记录去重前后数量
-- 透明 RGBA PNG / Mask / Overlay / ZIP
-- 模型健康检查
-- Mock 后端 + CI
-
-### v0.2 人工校正
-
-- 名称 / 分类 / 备注持久化
-- 删除错误素材
-- 多 Mask 合并
-- 矩形拆分 Mask
-- Scene Viewer 拖拽拆分区域
-- SAM 正点 / 负点新建素材
-- SAM 正点 / 负点精修已有素材
-- 编辑后自动重建 PNG / Mask / Overlay / JSON
-- 语义增强 Asset Score
-
-### v0.3 本地语义联想
-
-- 自建 Game Asset Ontology
-- 中文场景概念与修饰词匹配
-- 建筑 / 结构 / 道具 / 植被 / 地形 / 载具 / 生物 / 效果 / 材质分组
-- 状态 + 资产组合词
-- 中文概念 → GroundingDINO 英文对象 Prompt
-- Web 关键词树
-- 一键“应用到拆图” / “联想并拆图”
-- 场景本体覆盖率
-- 缺失素材推荐
-- 本体语义价值接入 Asset Score
-
-首批本体：
+支付边界：
 
 ```text
-森林 / 地铁站 / 工厂 / 海边渔村 / 洞穴 / 城堡 / 酒馆 / 城市小巷
+当前：Mock Provider
+未来：真实 Payment Provider + 服务端支付确认 / Webhook
 ```
 
-### v0.4 BiRefNet 边缘精修
+Mock 付费模拟可关闭：
 
-BiRefNet 不直接替换 SAM 的对象归属判断，只参与 **SAM 边界带** 的软 Alpha，并生成新的 `birefnet_refined` Asset Version。
-
-设计约束：
-
-- 硬 `mask` 不变
-- bbox 不变
-- 原始 segmented PNG 不覆盖
-- 合并 / 拆分仍使用硬 Mask
-- 默认关闭
-- 独立 Python sidecar 环境
-- sidecar 只收发内存 PNG(base64)，不接受任意本地文件路径
-
-## 项目结构
-
-```text
-game_creater/
-├─ backend/
-│  ├─ app/
-│  │  ├─ main.py
-│  │  ├─ models.py
-│  │  ├─ workflow_models.py
-│  │  ├─ workflow_api.py
-│  │  ├─ asset_library_models.py
-│  │  ├─ asset_library_api.py
-│  │  └─ services/
-│  │     ├─ pipeline.py
-│  │     ├─ grounded_sam2_local.py
-│  │     ├─ detection_filter.py
-│  │     ├─ asset_editor.py
-│  │     ├─ asset_library.py
-│  │     ├─ asset_library_sync.py
-│  │     ├─ asset_scoring.py
-│  │     ├─ semantic_engine.py
-│  │     ├─ prompt_builder.py
-│  │     ├─ generation_providers.py
-│  │     ├─ completion_service.py
-│  │     ├─ completion_providers.py
-│  │     ├─ birefnet_sidecar.py
-│  │     ├─ edge_refinement.py
-│  │     ├─ godot_exporter.py
-│  │     └─ unity_exporter.py
-│  ├─ tests/
-│  └─ requirements*.txt
-├─ birefnet_worker/
-├─ data/game_asset_ontology.json
-├─ docs/
-│  ├─ FULL_WORKFLOW.md
-│  ├─ ASSET_LIBRARY.md
-│  └─ REAL_GPU_VALIDATION.md
-├─ scripts/
-├─ frontend/
-│  ├─ app.js
-│  ├─ semantic.js
-│  ├─ workflow.js
-│  ├─ asset_library.js
-│  ├─ completion.js
-│  ├─ point_prompt.js
-│  ├─ edge_refine.js
-│  └─ engine_export.js
-├─ workspace/
-└─ validation_output/
+```bash
+export GAME_CREATER_ALLOW_MOCK_PAID=0
 ```
 
-## 1. 最快启动：Mock
+**当前版本不是可直接公网运营的商城。** 正式上线前还需要用户账户、创作者身份、真实支付、退款/税务、分账、对象存储、签名下载、审核/投诉和多租户权限。
+
+## 快速启动：Mock
 
 Windows PowerShell：
 
@@ -228,23 +155,22 @@ uvicorn app.main:app --reload --port 8000
 http://127.0.0.1:8000
 ```
 
-可直接用 Mock 模式验证：
+页面包含：
 
 ```text
-语义联想 → Mock 生图 → 自动拆图 → Asset Library 自动入库
-→ 编辑 / 版本 / Collection / 批量管理 → Godot / Unity 导出
+AI 场景全流程
+Asset Editor
+Asset Library
+Asset Store
+局部补全
+Godot / Unity 导出
 ```
 
-## 2. 真实生图 + GroundingDINO + SAM2
+## GroundingDINO + SAM2 真实模式
 
-OpenAI 生图 Provider：
+推荐：WSL2 Ubuntu / Linux + NVIDIA GPU。
 
-```bash
-export OPENAI_API_KEY="..."
-export GAME_CREATER_OPENAI_IMAGE_MODEL="gpt-image-2"
-```
-
-推荐 WSL2 Ubuntu / Linux + NVIDIA GPU：
+先安装与显卡匹配的 CUDA 版 PyTorch，然后：
 
 ```bash
 bash scripts/setup_grounded_sam2_wsl.sh
@@ -260,69 +186,86 @@ python scripts/smoke_test_grounded_sam2.py \
   --keyword "废弃地铁站"
 ```
 
-完整协议：`docs/REAL_GPU_VALIDATION.md`。
+完整验证协议：`docs/REAL_GPU_VALIDATION.md`。
 
-## 3. IOPaint / LaMa 局部补全
+## API 总览
 
-```bash
-bash scripts/setup_iopaint_sidecar.sh
-bash scripts/start_iopaint_sidecar.sh
-```
-
-原始素材不会被补全结果覆盖；补全输出进入 Asset Version 历史并等待审核。
-
-## 4. 多实例去重
+### 工作流
 
 ```text
-GAME_CREATER_DEDUPE_IOU=0.65
-GAME_CREATER_CROSS_LABEL_DEDUPE_IOU=0.92
-GAME_CREATER_MASK_DEDUPE_IOU=0.86
-GAME_CREATER_CROSS_LABEL_MASK_DEDUPE_IOU=0.96
+POST /api/v1/projects/run
+GET  /api/v1/projects/<project_id>
 ```
 
-## 5. SAM 正点 / 负点修正
+### Asset Library
 
 ```text
-绿色点：包含目标
-红色点：排除背景
+GET   /api/v1/library/stats
+GET   /api/v1/library/assets
+PATCH /api/v1/library/assets/<asset_id>
+POST  /api/v1/library/assets/bulk
+GET   /api/v1/library/assets/<asset_id>/versions
+GET   /api/v1/library/assets/<asset_id>/relations
+POST  /api/v1/library/reindex
 ```
 
-API：
+### Asset Store
 
 ```text
-POST /api/v1/scenes/<scene_id>/assets/point-segment
+GET   /api/v1/store/stats
+GET   /api/v1/store/listings
+GET   /api/v1/store/payment/providers
+GET   /api/v1/store/seller/listings
+POST  /api/v1/store/seller/listings
+PATCH /api/v1/store/seller/listings/<listing_id>
+GET   /api/v1/store/cart
+POST  /api/v1/store/cart/<listing_id>
+DELETE /api/v1/store/cart/<listing_id>
+POST  /api/v1/store/checkout
+GET   /api/v1/store/orders
+GET   /api/v1/store/library
+GET   /api/v1/store/downloads/<entitlement_id>
 ```
 
-## 部署说明
+## 目前部署边界
 
-当前版本定位为 localhost / 本地优先开发工具。当前开发版 SQLite 与工作区同属本地运行状态，因此 **不要直接将 FastAPI 开发服务器暴露到公网**。
+当前是 **localhost / local-first 开发工具**。
 
-桌面化 / 多用户阶段将进一步处理：
+不要直接把 FastAPI 开发服务器暴露到公网。
 
-- SQLite 迁至不经过 StaticFiles 的专用 private state 目录
-- 用户权限 / 资源访问控制
-- Schema migration
-- 大规模库可切换 PostgreSQL
+正式多用户商店需要至少增加：
 
-## 当前验证
+```text
+身份认证 / RBAC
+数据库迁移
+真正支付 Provider
+Webhook 确认支付
+创作者分账
+对象存储 / CDN
+签名下载 URL
+下载限流
+税务 / 发票 / 退款
+授权条款
+内容审核 / 投诉
+多租户资源权限
+```
 
-Core CI 覆盖：
+## CI
 
-- Game Asset Ontology / Semantic Engine / Prompt Builder
-- Mock 生图 → 自动回传 → 自动拆图
-- GroundingDINO / SAM2 Mock 与 Fake integration
-- bbox / Mask 去重
-- Asset Score
-- Scene / Project persistence
-- Asset Library 自动入库和稳定 Global ID
-- Library ↔ Scene 元数据同步
-- 标签 / 搜索 / Review State / Collection / Relations
-- Asset Versions / Archive
-- Project provenance
-- AI Completion version（不自动覆盖 Active Version）
-- BiRefNet version（原 segmented PNG 保留）
-- Godot / Unity 导出
-- 前端 JavaScript syntax
-- 本地 AI helper scripts
+Core CI 当前覆盖：
 
-真实 NVIDIA / WSL2 / OpenAI API / BiRefNet / IOPaint 的生产质量仍需在目标机器与代表性 AI 游戏场景上实测。
+- Semantic / Asset Plan
+- Mock generation → automatic split
+- GroundingDINO/SAM2 fake integration
+- Asset Editor
+- Asset Library 自动索引、标签、Collection、关系、版本、来源
+- Library ↔ Scene 双向同步
+- BiRefNet 版本化精修
+- AI Completion 版本化
+- Asset Store 上架规则
+- Store search / cart / Mock checkout
+- Order / Entitlement / version-locked download
+- ZIP license / metadata
+- Godot / Unity export
+- Frontend JavaScript syntax
+- Local AI helper scripts
