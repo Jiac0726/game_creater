@@ -111,6 +111,8 @@ def test_cart_mock_checkout_grants_versioned_entitlement_and_download(tmp_path: 
     assert order.total_minor == 2500
     assert order.payment_provider == "mock"
     assert order.provider_reference and order.provider_reference.startswith("mock_")
+    assert len(order.items) == 1
+    assert order.items[0].asset_version == 1
     assert len(order.entitlements) == 1
     entitlement = order.entitlements[0]
     assert entitlement.asset_id == asset_id
@@ -130,6 +132,7 @@ def test_cart_mock_checkout_grants_versioned_entitlement_and_download(tmp_path: 
     )
     assert library.get(asset_id).active_version == 2
     assert store.list_entitlements()[0].asset_version == 1
+    assert store.get_order(order.id).items[0].asset_version == 1
 
     archive_path, download = store.build_download(entitlement.id)
     assert archive_path.is_file()
