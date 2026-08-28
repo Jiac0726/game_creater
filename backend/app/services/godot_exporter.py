@@ -6,17 +6,16 @@ import zipfile
 from pathlib import Path
 
 from app.models import AssetRecord, SceneManifest
+from app.services.scene_layout import SceneLayoutBuilder
 from app.services.scene_store import SceneStore
 
 
 class GodotExporter:
     """Export one normalized Game Creater scene as a self-contained Godot 4 project.
 
-    The exporter does not require the Godot binary. Each extracted RGBA asset is
-    copied into the project and instantiated as a Sprite2D. Sprite node origins
-    are placed at the bottom-center of their source bboxes and the texture is
-    offset upward, so the visual placement remains pixel-accurate while Godot's
-    y_sort_enabled can use the object bottom as a practical painter-order anchor.
+    The exporter does not require the Godot binary. Placement is sourced from
+    the engine-neutral SceneLayoutBuilder so future engine exporters can share
+    exactly the same coordinates, pivots and painter-order semantics.
     """
 
     def __init__(self, workspace: str | Path, export_dir: str | Path) -> None:
@@ -24,16 +23,18 @@ class GodotExporter:
         self.export_dir = Path(export_dir)
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self.store = SceneStore(self.workspace)
+        self.layout_builder = SceneLayoutBuilder()
 
     def export(self, scene_id: str) -> Path:
         manifest = self.store.load(scene_id)
+        layout = self.layout_builder.build(manifest)
         scene_dir = self.workspace / scene_id
         archive_path = self.export_dir / f"game_creater_{scene_id}_godot4.zip"
 
         project_text = self._project_godot(manifest)
-        scene_text = self._scene_tscn(manifest)
+        scene_text = self._scene_tscn(manifest, layout)
         readme_text = self._project_readme(manifest)
-        metadata = self._metadata(manifest)
+        metadata = self._metadata(manifest, layout)
 
         with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("project.godot", project_text)
@@ -41,6 +42,10 @@ class GodotExporter:
             archive.writestr(
                 "metadata/scene.json",
                 json.dumps(metadata, ensure_ascii=False, indent=2),
+            )
+            archive.writestr(
+                "metadata/layout.json",
+                json.dumps(layout, ensure_ascii=False, indent=2),
             )
             archive.writestr("README_GAME_CREATER.txt", readme_text)
 
@@ -75,9 +80,11 @@ class GodotExporter:
             'renderer/rendering_method.mobile="gl_compatibility"\n'
         )
 
-    def _scene_tscn(self, manifest: SceneManifest) -> str:
+    def _scene_tscn(self, manifest: SceneManifest, layout: dict | None = None) -> str:
+        layout = layout or self.layout_builder.build(manifest)
         lines: list[str] = ["[gd_scene format=3]", ""]
         resource_ids: dict[str, str] = {}
+        asset_by_id = {asset.id: asset for asset in manifest.assets}
 
         for index, asset in enumerate(manifest.assets, start=1):
             resource_id = f"{index}_asset"
@@ -98,31 +105,34 @@ class GodotExporter:
             ]
         )
 
-        # Stable source order is kept for objects whose Y positions are equal.
-        ordered_assets = sorted(
-            enumerate(manifest.assets),
-            key=lambda pair: (pair[1].bbox.y2, pair[0]),
+        ordered = sorted(
+            enumerate(layout["assets"]),
+            key=lambda pair: (pair[1]["sort_y"], pair[0]),
         )
-        for _, asset in ordered_assets:
-            width = asset.bbox.x2 - asset.bbox.x1
-            height = asset.bbox.y2 - asset.bbox.y1
-            center_x = (asset.bbox.x1 + asset.bbox.x2) / 2.0
-            bottom_y = float(asset.bbox.y2)
-            offset_y = -height / 2.0
+        for _, entry in ordered:
+            asset = asset_by_id[entry["id"]]
+            position_x, position_y = entry["anchor"]["position"]
+            offset_x, offset_y = entry["texture_offset"]
             node_name = self._node_name(asset)
             resource_id = resource_ids[asset.id]
 
             lines.append(
                 f'[node name="{self._godot_string(node_name)}" type="Sprite2D" parent="."]'
             )
-            lines.append(f"position = Vector2({self._number(center_x)}, {self._number(bottom_y)})")
-            lines.append(f"offset = Vector2(0, {self._number(offset_y)})")
+            lines.append(
+                f"position = Vector2({self._number(position_x)}, {self._number(position_y)})"
+            )
+            lines.append(
+                f"offset = Vector2({self._number(offset_x)}, {self._number(offset_y)})"
+            )
             lines.append(f'texture = ExtResource("{resource_id}")')
             lines.append("")
 
         return "\n".join(lines).rstrip() + "\n"
 
-    def _metadata(self, manifest: SceneManifest) -> dict:
+    def _metadata(self, manifest: SceneManifest, layout: dict | None = None) -> dict:
+        layout = layout or self.layout_builder.build(manifest)
+        layout_by_id = {entry["id"]: entry for entry in layout["assets"]}
         data = manifest.model_dump()
         data["engine_export"] = {
             "engine": "godot",
@@ -131,16 +141,14 @@ class GodotExporter:
             "coordinate_system": "source-image pixels; origin top-left",
             "sprite_anchor": "bbox bottom-center",
             "y_sort_enabled": True,
+            "portable_layout": "res://metadata/layout.json",
         }
         data["assets"] = [
             {
                 **asset.model_dump(),
                 "godot_texture": f"res://{self._godot_asset_path(asset)}",
                 "godot_node": self._node_name(asset),
-                "godot_position": [
-                    (asset.bbox.x1 + asset.bbox.x2) / 2.0,
-                    float(asset.bbox.y2),
-                ],
+                "godot_position": layout_by_id[asset.id]["anchor"]["position"],
             }
             for asset in manifest.assets
         ]
@@ -162,6 +170,7 @@ Placement:
 - Sprite texture offsets preserve the original image placement.
 - The root Node2D has y_sort_enabled=true, so object bottoms provide a useful
   first-pass painter order for ground-based 2D scenes.
+- metadata/layout.json stores the same placement in an engine-neutral format.
 
 Not generated yet:
 - collision shapes
