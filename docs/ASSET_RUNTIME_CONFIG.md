@@ -19,6 +19,16 @@ Asset
 
 The runtime configuration is stored in the same local Asset Library SQLite database through the `asset_runtime_config` table. It is separate from image versions: switching an image version does not silently overwrite gameplay configuration.
 
+Collision modes now include:
+
+```text
+none
+box
+polygon
+```
+
+Polygon point data is stored separately so image-version/runtime metadata and editable collision geometry do not overwrite each other. See `docs/ASSET_2D_GAME_READY.md` for Polygon Collision, Sprite Animation and TileSet delivery.
+
 ## API
 
 Read config:
@@ -62,6 +72,12 @@ POST /api/v1/library/packs/export-runtime
 
 The normal pack metadata is preserved, and an additional `runtime_config.json` snapshot is written so the exported pack freezes the configuration used at delivery time.
 
+For Polygon Collision + Sprite Animation + TileSet delivery use:
+
+```text
+POST /api/v1/library/packs/export-game-ready
+```
+
 ## Godot 4
 
 Runtime-aware Godot packages add:
@@ -83,6 +99,8 @@ Each generated `.tscn` contains:
 - `z_index` from sorting order
 - optional `StaticBody2D + CollisionShape2D` for solid box collision
 - optional `Area2D + CollisionShape2D` when the box is a trigger
+
+Game Ready export can additionally append native `CollisionPolygon2D`, generate `AnimatedSprite2D` scenes and generate TileSet EditorScripts.
 
 The runtime exporter also corrects AtlasTexture references to the actual `res://godot4/assets/` package layout.
 
@@ -114,6 +132,8 @@ The Editor builder:
 - creates `BoxCollider2D` where configured
 - applies `isTrigger`
 - attaches `GameCreaterRuntimeMetadata` with render layer and gameplay tags
+
+Game Ready export adds a second builder that creates PolygonCollider2D geometry, native AnimationClip `.anim` resources and Unity Tile assets.
 
 ## Advanced Library workflow
 
