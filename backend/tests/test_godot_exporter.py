@@ -79,3 +79,23 @@ def test_godot_export_does_not_instantiate_reference_source_image(tmp_path: Path
         scene = archive.read("scenes/generated_scene.tscn").decode("utf-8")
 
     assert "reference/source" not in scene
+
+
+def test_godot_export_api_returns_generated_zip(tmp_path: Path, monkeypatch) -> None:
+    workspace, manifest = _scene(tmp_path, monkeypatch)
+    exports = tmp_path / "api_exports"
+
+    import app.main as main
+
+    monkeypatch.setattr(main, "WORKSPACE", workspace)
+    monkeypatch.setattr(main, "EXPORTS", exports)
+    monkeypatch.setattr(main, "godot_exporter", GodotExporter(workspace, exports))
+
+    response = main.export_scene_godot(manifest.scene_id)
+    archive_path = Path(response.path)
+
+    assert archive_path.is_file()
+    assert response.media_type == "application/zip"
+    with zipfile.ZipFile(archive_path) as archive:
+        assert "project.godot" in archive.namelist()
+        assert "scenes/generated_scene.tscn" in archive.namelist()
