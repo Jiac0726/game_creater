@@ -215,4 +215,4 @@ python scripts/validate_unity_game_ready.py path/to/unity_pack.zip --unity "C:/P
 
 The validator creates a real empty Unity project in batch mode, copies the pack into `Assets/GameCreaterPack`, executes `GameCreaterGameReady2DBuilder.Build`, and verifies generated Prefab/Animation/Tile folders. A valid local Unity Editor installation/license is required.
 
-These scripts make the external validation boundary executable rather than leaving it as a manual checklist.
+These scripts make the external validation boundary executable rather than leaving it as a manual checklist. They have not been executed against a real Godot or Unity installation in the repository CI environment.
