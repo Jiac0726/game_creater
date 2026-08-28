@@ -166,28 +166,6 @@ Asset Store
 Godot / Unity 导出
 ```
 
-## GroundingDINO + SAM2 真实模式
-
-推荐：WSL2 Ubuntu / Linux + NVIDIA GPU。
-
-先安装与显卡匹配的 CUDA 版 PyTorch，然后：
-
-```bash
-bash scripts/setup_grounded_sam2_wsl.sh
-python scripts/verify_grounded_sam2_env.py
-bash scripts/start_grounded_sam2_wsl.sh
-```
-
-真实图片 smoke test：
-
-```bash
-python scripts/smoke_test_grounded_sam2.py \
-  --image /mnt/c/path/to/scene.png \
-  --keyword "废弃地铁站"
-```
-
-完整验证协议：`docs/REAL_GPU_VALIDATION.md`。
-
 ## API 总览
 
 ### 工作流
@@ -227,11 +205,9 @@ GET    /api/v1/store/library
 GET    /api/v1/store/downloads/<entitlement_id>
 ```
 
-## 目前部署边界
+## 部署边界
 
-当前是 **localhost / local-first 开发工具**。
-
-不要直接把 FastAPI 开发服务器暴露到公网。
+当前是 **localhost / local-first 开发工具**，不要直接把 FastAPI 开发服务器暴露到公网。
 
 正式多用户商店需要至少增加：
 
@@ -252,7 +228,7 @@ Webhook 确认支付
 
 ## CI
 
-Core CI 当前覆盖：
+Core CI 已覆盖并通过：
 
 - Semantic / Asset Plan
 - Mock generation → automatic split
