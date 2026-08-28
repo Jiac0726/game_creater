@@ -63,7 +63,9 @@ def build_workflow_router(workspace: str | Path, pipeline: AssetSplitPipeline) -
     ) -> AssetCompletionResult:
         _validate_scene_id(scene_id)
         try:
-            return completion.complete(scene_id, asset_id, request)
+            result = completion.complete(scene_id, asset_id, request)
+            manager.record_completion(result)
+            return result
         except SceneNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Scene not found") from exc
         except AssetNotFoundError as exc:
