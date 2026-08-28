@@ -19,7 +19,7 @@ from app.asset_pack_models import (
     AssetPackUpdateInfo,
     AssetPackUpdateRequest,
 )
-from app.services.asset_library import AssetLibrary, LibraryAssetNotFoundError, utc_now
+from app.services.asset_library import AssetLibrary, utc_now
 
 
 class AssetPackNotFoundError(KeyError):
@@ -129,10 +129,14 @@ class AssetPackSystemService:
         versions = [item["version"] for item in release_rows]
         latest = max(versions, key=self._version_tuple) if versions else None
         return AssetPackDefinition(
-            id=row["id"], name=row["name"], description=row["description"],
+            id=row["id"],
+            name=row["name"],
+            description=row["description"],
             asset_ids=json.loads(row["asset_ids_json"]),
             dependencies=[AssetPackDependency(**item) for item in json.loads(row["dependencies_json"] or "[]")],
-            latest_version=latest, created_at=row["created_at"], updated_at=row["updated_at"],
+            latest_version=latest,
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )
 
     def update(self, pack_id: str, request: AssetPackUpdateRequest) -> AssetPackDefinition:
@@ -144,13 +148,13 @@ class AssetPackSystemService:
         asset_ids = current.asset_ids if request.asset_ids is None else self._validate_assets(request.asset_ids)
         dependencies = current.dependencies if request.dependencies is None else request.dependencies
         self._validate_dependencies(pack_id, dependencies, allow_missing=False)
+        self._assert_no_cycle_with_override(pack_id, dependencies)
         now = utc_now()
         with self.library._connect() as db:
             db.execute(
                 "UPDATE game_asset_packs SET name=?,description=?,asset_ids_json=?,dependencies_json=?,updated_at=? WHERE id=?",
                 (name, description, json.dumps(asset_ids), self._dependencies_json(dependencies), now, pack_id),
             )
-        self._assert_no_cycle(pack_id)
         return self.get(pack_id)
 
     def _validate_dependencies(self, pack_id: str, dependencies: list[AssetPackDependency], *, allow_missing: bool) -> None:
@@ -165,9 +169,12 @@ class AssetPackSystemService:
                 if not allow_missing:
                     raise ValueError(f"Dependency pack not found: {dependency.pack_id}")
 
-    def _assert_no_cycle(self, start_pack_id: str) -> None:
+    def _assert_no_cycle_with_override(self, start_pack_id: str, proposed: list[AssetPackDependency]) -> None:
         visiting: set[str] = set()
         visited: set[str] = set()
+
+        def dependencies_for(pack_id: str) -> list[AssetPackDependency]:
+            return proposed if pack_id == start_pack_id else self.get(pack_id).dependencies
 
         def visit(pack_id: str) -> None:
             if pack_id in visiting:
@@ -175,7 +182,7 @@ class AssetPackSystemService:
             if pack_id in visited:
                 return
             visiting.add(pack_id)
-            for dependency in self.get(pack_id).dependencies:
+            for dependency in dependencies_for(pack_id):
                 visit(dependency.pack_id)
             visiting.remove(pack_id)
             visited.add(pack_id)
@@ -201,16 +208,25 @@ class AssetPackSystemService:
             active = versions.get(asset.active_version)
             if active is None:
                 raise ValueError(f"Active asset version missing: {asset_id} v{asset.active_version}")
-            locks.append(AssetPackAssetLock(
-                asset_id=asset.id,
-                version=asset.active_version,
-                name=asset.name,
-                image_path=active.image_path,
-                mask_path=active.mask_path,
-                alpha_path=active.alpha_path,
-            ))
+            locks.append(
+                AssetPackAssetLock(
+                    asset_id=asset.id,
+                    version=asset.active_version,
+                    name=asset.name,
+                    image_path=active.image_path,
+                    mask_path=active.mask_path,
+                    alpha_path=active.alpha_path,
+                )
+            )
         now = utc_now()
-        release = AssetPackRelease(pack_id=pack_id, version=version, notes=request.notes.strip(), assets=locks, dependencies=dependencies, created_at=now)
+        release = AssetPackRelease(
+            pack_id=pack_id,
+            version=version,
+            notes=request.notes.strip(),
+            assets=locks,
+            dependencies=dependencies,
+            created_at=now,
+        )
         try:
             with self.library._connect() as db:
                 db.execute(
@@ -234,7 +250,10 @@ class AssetPackSystemService:
     def get_release(self, pack_id: str, version: str) -> AssetPackRelease:
         self._version_tuple(version)
         with self.library._connect() as db:
-            row = db.execute("SELECT manifest_json FROM game_asset_pack_releases WHERE pack_id=? AND version=?", (pack_id, version)).fetchone()
+            row = db.execute(
+                "SELECT manifest_json FROM game_asset_pack_releases WHERE pack_id=? AND version=?",
+                (pack_id, version),
+            ).fetchone()
         if row is None:
             raise AssetPackReleaseNotFoundError(f"{pack_id}@{version}")
         return AssetPackRelease.model_validate_json(row["manifest_json"])
@@ -256,7 +275,9 @@ class AssetPackSystemService:
                 raise ValueError("Asset Pack dependency cycle detected during install")
             if current_pack in resolved:
                 if resolved[current_pack] != current_version:
-                    raise ValueError(f"Dependency version conflict for {current_pack}: {resolved[current_pack]} vs {current_version}")
+                    raise ValueError(
+                        f"Dependency version conflict for {current_pack}: {resolved[current_pack]} vs {current_version}"
+                    )
                 return
             visiting.add(current_pack)
             release = self.get_release(current_pack, current_version)
@@ -265,11 +286,10 @@ class AssetPackSystemService:
                     raise ValueError("Released dependency must be version-pinned")
                 resolve(dependency.pack_id, dependency.version)
             for asset in release.assets:
-                key = asset.asset_id
-                existing = asset_locks.get(key)
+                existing = asset_locks.get(asset.asset_id)
                 if existing and existing["version"] != asset.version:
-                    raise ValueError(f"Asset version conflict for {key}")
-                asset_locks[key] = asset.model_dump()
+                    raise ValueError(f"Asset version conflict for {asset.asset_id}")
+                asset_locks[asset.asset_id] = asset.model_dump()
             visiting.remove(current_pack)
             resolved[current_pack] = current_version
 
@@ -284,22 +304,41 @@ class AssetPackSystemService:
         with self.library._connect() as db:
             for dependency_pack_id, dependency_version in resolved.items():
                 db.execute(
-                    "INSERT INTO game_asset_pack_installations(pack_id,version,lock_json,installed_at) VALUES (?,?,?,?) ON CONFLICT(pack_id) DO UPDATE SET version=excluded.version,lock_json=excluded.lock_json,installed_at=excluded.installed_at",
+                    "INSERT INTO game_asset_pack_installations(pack_id,version,lock_json,installed_at) VALUES (?,?,?,?) "
+                    "ON CONFLICT(pack_id) DO UPDATE SET version=excluded.version,lock_json=excluded.lock_json,installed_at=excluded.installed_at",
                     (dependency_pack_id, dependency_version, json.dumps(lock, ensure_ascii=False), now),
                 )
         return self.get_installation(pack_id)
 
     def list_installations(self) -> list[AssetPackInstallation]:
         with self.library._connect() as db:
-            rows = db.execute("SELECT * FROM game_asset_pack_installations ORDER BY installed_at DESC,pack_id").fetchall()
-        return [AssetPackInstallation(pack_id=row["pack_id"], version=row["version"], installed_at=row["installed_at"], lock=json.loads(row["lock_json"])) for row in rows]
+            rows = db.execute(
+                "SELECT * FROM game_asset_pack_installations ORDER BY installed_at DESC,pack_id"
+            ).fetchall()
+        return [
+            AssetPackInstallation(
+                pack_id=row["pack_id"],
+                version=row["version"],
+                installed_at=row["installed_at"],
+                lock=json.loads(row["lock_json"]),
+            )
+            for row in rows
+        ]
 
     def get_installation(self, pack_id: str) -> AssetPackInstallation:
         with self.library._connect() as db:
-            row = db.execute("SELECT * FROM game_asset_pack_installations WHERE pack_id=?", (pack_id,)).fetchone()
+            row = db.execute(
+                "SELECT * FROM game_asset_pack_installations WHERE pack_id=?",
+                (pack_id,),
+            ).fetchone()
         if row is None:
             raise AssetPackNotFoundError(f"Pack is not installed: {pack_id}")
-        return AssetPackInstallation(pack_id=row["pack_id"], version=row["version"], installed_at=row["installed_at"], lock=json.loads(row["lock_json"]))
+        return AssetPackInstallation(
+            pack_id=row["pack_id"],
+            version=row["version"],
+            installed_at=row["installed_at"],
+            lock=json.loads(row["lock_json"]),
+        )
 
     def uninstall(self, pack_id: str) -> None:
         with self.library._connect() as db:
@@ -309,12 +348,14 @@ class AssetPackSystemService:
         result = []
         for installed in self.list_installations():
             latest = self._latest_version(installed.pack_id) or installed.version
-            result.append(AssetPackUpdateInfo(
-                pack_id=installed.pack_id,
-                installed_version=installed.version,
-                latest_version=latest,
-                update_available=self._version_tuple(latest) > self._version_tuple(installed.version),
-            ))
+            result.append(
+                AssetPackUpdateInfo(
+                    pack_id=installed.pack_id,
+                    installed_version=installed.version,
+                    latest_version=latest,
+                    update_available=self._version_tuple(latest) > self._version_tuple(installed.version),
+                )
+            )
         return result
 
     def export_release(self, pack_id: str, version: str | None = None) -> AssetPackExportResult:
@@ -333,24 +374,40 @@ class AssetPackSystemService:
             "pack": pack.model_dump(mode="json"),
             "release": release.model_dump(mode="json"),
         }
-        (root / "pack.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        (root / "pack.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         for locked in release.assets:
             asset_dir = root / "assets" / locked.asset_id
             asset_dir.mkdir(parents=True)
-            for label, rel in (("asset.png", locked.image_path), ("mask.png", locked.mask_path), ("alpha.png", locked.alpha_path)):
+            for label, rel in (
+                ("asset.png", locked.image_path),
+                ("mask.png", locked.mask_path),
+                ("alpha.png", locked.alpha_path),
+            ):
                 if not rel:
                     continue
                 src = self.workspace / rel
                 if src.is_file():
                     shutil.copy2(src, asset_dir / label)
-            (asset_dir / "asset.json").write_text(json.dumps(locked.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8")
+            (asset_dir / "asset.json").write_text(
+                json.dumps(locked.model_dump(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         archive = self.state_root / f"{export_id}.zip"
         archive.unlink(missing_ok=True)
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as out:
             for path in sorted(root.rglob("*")):
                 if path.is_file():
                     out.write(path, path.relative_to(root))
-        return AssetPackExportResult(export_id=export_id, pack_id=pack_id, version=resolved_version, archive_path=str(archive), download_url=f"/api/v1/library/package-system/exports/{export_id}")
+        return AssetPackExportResult(
+            export_id=export_id,
+            pack_id=pack_id,
+            version=resolved_version,
+            archive_path=str(archive),
+            download_url=f"/api/v1/library/package-system/exports/{export_id}",
+        )
 
     def export_path(self, export_id: str) -> Path:
         if not re.fullmatch(r"pkgexp_[0-9a-f]{12}", export_id):
