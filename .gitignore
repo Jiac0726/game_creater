@@ -17,6 +17,7 @@ Thumbs.db
 workspace/*
 !workspace/.gitkeep
 validation_output/
+.game_creater_state/
 
 # Local AI model weights
 model_weights/*
