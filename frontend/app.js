@@ -35,6 +35,7 @@ const miniQueueCount = $("miniQueueCount");
 const miniTaskName = $("miniTaskName");
 const miniTaskDetail = $("miniTaskDetail");
 const miniPipelinePercent = $("miniPipelinePercent");
+const miniLogText = $("miniLogText");
 const refreshLibraryBtn = $("refreshLibraryBtn");
 const sceneList = $("sceneList");
 const collapseScenesBtn = $("collapseScenesBtn");
@@ -114,6 +115,7 @@ function startPipeline(file, prompts) {
   if (taskDetail) taskDetail.textContent = prompts || "自动识别游戏素材";
   if (miniTaskName) miniTaskName.textContent = file?.name || "场景拆解任务";
   if (miniTaskDetail) miniTaskDetail.textContent = prompts || "自动识别游戏素材";
+  if (miniLogText) miniLogText.textContent = `开始处理 ${file?.name || "场景"} · 等待检测结果…`;
 
   const stageNames = ["detection", "segmentation", "refine"];
   let stageIndex = 0;
@@ -138,6 +140,7 @@ function finishPipeline(assetTotal) {
   document.querySelectorAll("[data-mini-stage]").forEach((stage) => stage.classList.add("done"));
   if (taskDetail) taskDetail.textContent = `完成 ${assetTotal} 个素材 · 可导出至 Godot / Unity`;
   if (miniTaskDetail) miniTaskDetail.textContent = `完成 ${assetTotal} 个素材 · 可导出`;
+  if (miniLogText) miniLogText.textContent = `已完成 ${assetTotal} 个素材 · 透明 PNG / Mask / Overlay 已写入当前项目。`;
   setPipelineProgress(100, "COMPLETE");
 }
 
@@ -149,6 +152,7 @@ function failPipeline(detail) {
   document.querySelector("[data-mini-stage].running")?.classList.replace("running", "failed");
   if (taskDetail) taskDetail.textContent = detail || "任务处理失败";
   if (miniTaskDetail) miniTaskDetail.textContent = detail || "任务处理失败";
+  if (miniLogText) miniLogText.textContent = `任务失败：${detail || "未知错误"}`;
   setPipelineProgress(Number.parseInt(pipelinePercent?.textContent || "0", 10), "FAILED");
 }
 
@@ -662,6 +666,11 @@ function showAsset(manifest, asset) {
       <span>检测置信度: ${Math.round((asset.confidence || 0) * 100)}%</span>
       <span>bbox: ${asset.bbox.x1}, ${asset.bbox.y1}, ${asset.bbox.x2}, ${asset.bbox.y2}</span>
     </div>
+    <section class="inspector-section">
+      <div class="inspector-section-head"><strong>AI 拆图结果</strong><b class="inspector-score">置信度 ${Math.round((asset.confidence || 0) * 100)}%</b></div>
+      <div class="inspector-progress"><i style="width:${Math.round((asset.confidence || 0) * 100)}%"></i></div>
+      <div class="inspector-kv"><span>类型</span><b>${escapeHtml(asset.category || "uncategorized")}</b><span>场景尺寸</span><b>${manifest.width} × ${manifest.height}</b><span>颜色模式</span><b>RGBA · 32-bit</b></div>
+    </section>
     <div class="asset-editor">
       <label>
         <span>名称</span>
@@ -696,16 +705,35 @@ function showAsset(manifest, asset) {
       <button id="splitAssetBtn" class="secondary-btn">按矩形拆分</button>
     </div>
 
+    <section class="inspector-section">
+      <div class="inspector-section-head"><strong>边缘优化</strong><span class="inspector-state">可选 sidecar</span></div>
+      <label class="inspector-range"><span>边缘精细度</span><input type="range" min="0" max="100" value="85" disabled /><b>85</b></label>
+      <div class="inspector-checks"><label><input type="checkbox" disabled /> 去除锯齿</label><label><input type="checkbox" disabled /> 填充透明孔洞</label></div>
+    </section>
+
     <div class="preview-actions">
       <a href="${base}${asset.image}" download>下载透明 PNG</a>
       <a href="${base}${asset.mask}" download>下载 Mask</a>
     </div>
+    <section class="inspector-section inspector-export-section">
+      <div class="inspector-section-head"><strong>导出设置</strong><span class="inspector-state">当前场景</span></div>
+      <label class="inspector-select"><span>格式</span><select><option>PNG</option><option>WEBP</option></select></label>
+      <label class="inspector-select"><span>尺寸</span><select><option>保持原始尺寸</option><option>2× 放大</option><option>1/2 缩小</option></select></label>
+      <div class="inspector-engine"><button type="button" class="active">Godot</button><button type="button">Unity</button></div>
+      <button type="button" class="inspector-export-button" data-view-jump="export">导出当前素材 <b>→</b></button>
+    </section>
     <button id="deleteAssetBtn" class="danger-btn">删除这个素材</button>
   `;
 
   $("saveAssetBtn").addEventListener("click", () => saveAssetMetadata(manifest, asset));
   $("deleteAssetBtn").addEventListener("click", () => deleteAsset(manifest, asset));
   $("splitAssetBtn").addEventListener("click", () => splitAsset(manifest, asset));
+  assetPreview.querySelectorAll("[data-view-jump]").forEach((item) => {
+    item.addEventListener("click", (event) => {
+      event.preventDefault();
+      activateView(item.dataset.viewJump);
+    });
+  });
 }
 
 async function saveAssetMetadata(manifest, asset) {

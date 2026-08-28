@@ -141,7 +141,7 @@
               <div class="library-folder-head"><span>建筑素材</span><b id="assetCount">0 项</b></div>
               <div id="selectionBar" class="selection-bar hidden"><span id="selectionCount">已选 0</span><button id="mergeSelectedBtn" disabled>合并选中</button></div>
               <div id="assetList" class="asset-list empty"><div class="empty-state compact"><span class="empty-icon">▦</span><strong>素材库等待内容</strong><small>点击左侧“AI 拆图”导入场景。</small></div></div>
-              <div class="library-foot"><span>显示 <b id="libraryFootCount">0</b> 项</span><input id="thumbnailSize" type="range" min="74" max="150" value="105" aria-label="缩略图大小" /></div>
+              <div class="library-foot"><span>显示 <b id="libraryFootCount">0</b> 项</span><input id="thumbnailSize" type="range" min="96" max="180" value="132" aria-label="缩略图大小" /></div>
             </div>
           </div>
         </aside>
@@ -160,6 +160,7 @@
           <div class="mini-task-queue">
             <div class="mini-task-head"><span>任务队列 <b id="miniQueueCount">0</b></span><button type="button" data-view-jump="workflow">查看全部</button></div>
             <div class="mini-task-row"><span class="mini-task-icon">✦</span><span><strong id="miniTaskName">等待场景任务</strong><small id="miniTaskDetail">AI 素材管线尚未启动</small></span><div class="mini-stages"><span data-mini-stage="detection">检测</span><i></i><span data-mini-stage="segmentation">分割</span><i></i><span data-mini-stage="refine">精修</span><i></i><span data-mini-stage="export">导出</span></div><b id="miniPipelinePercent">0%</b></div>
+            <div class="mini-log"><div><strong>日志</strong><button type="button">清空日志</button></div><p id="miniLogText">等待素材任务；选择素材后可继续处理或导出。</p></div>
           </div>
         </section>
 
