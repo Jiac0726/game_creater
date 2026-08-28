@@ -59,10 +59,30 @@ def test_unity_builder_converts_y_down_layout_into_y_up_world_coordinates(tmp_pa
         builder = archive.read(
             "Assets/GameCreater/Editor/GameCreaterSceneBuilder.cs"
         ).decode("utf-8")
+        readme = archive.read("README_UNITY_IMPORT.txt").decode("utf-8")
 
     assert "sourceCenterX = entry.anchor.position[0] + entry.texture_offset[0]" in builder
     assert "sourceCenterY = entry.anchor.position[1] + entry.texture_offset[1]" in builder
     assert "layout.source_size.height - sourceCenterY" in builder
-    assert "100 source pixels = 1 Unity world unit" in archive.read(
-        "README_UNITY_IMPORT.txt"
-    ).decode("utf-8")
+    assert "100 source pixels = 1 Unity world unit" in readme
+
+
+def test_unity_export_api_returns_generated_bundle(tmp_path: Path, monkeypatch) -> None:
+    workspace, manifest = _scene(tmp_path, monkeypatch)
+    exports = tmp_path / "api_exports"
+
+    import app.main as main
+
+    monkeypatch.setattr(main, "WORKSPACE", workspace)
+    monkeypatch.setattr(main, "EXPORTS", exports)
+    monkeypatch.setattr(main, "unity_exporter", UnityExporter(workspace, exports))
+
+    response = main.export_scene_unity(manifest.scene_id)
+    archive_path = Path(response.path)
+
+    assert archive_path.is_file()
+    assert response.media_type == "application/zip"
+    with zipfile.ZipFile(archive_path) as archive:
+        names = set(archive.namelist())
+    assert "Assets/GameCreater/Generated/layout.json" in names
+    assert "Assets/GameCreater/Editor/GameCreaterSceneBuilder.cs" in names
