@@ -19,6 +19,7 @@ from app.services.pipeline import AssetSplitPipeline
 from app.services.project_store import ProjectNotFoundError
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError
 from app.services.workflow_manager import WorkflowManager
+from app.smart_asset_search_api import build_smart_asset_search_router
 from app.workflow_models import ProjectRecord, RunProjectRequest, RunProjectResponse
 
 PROJECT_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
@@ -34,6 +35,7 @@ def build_workflow_router(workspace: str | Path, pipeline: AssetSplitPipeline) -
     router.include_router(build_asset_workflow_maintenance_router(workspace, pipeline))
     router.include_router(build_asset_runtime_router(workspace, pipeline))
     router.include_router(build_asset_2d_router(workspace, pipeline))
+    router.include_router(build_smart_asset_search_router(workspace))
     router.include_router(ai_control_router)
 
     @router.get("/generation/providers")
