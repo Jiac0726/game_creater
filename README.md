@@ -118,20 +118,13 @@ Asset Library
 - 销量 / 下载量 / 商店统计
 - 商店私有状态保存到 `.game_creater_state/store.db`，不放在静态 `/workspace` 下
 
-支付边界：
-
-```text
-当前：Mock Provider
-未来：真实 Payment Provider + 服务端支付确认 / Webhook
-```
-
 Mock 付费模拟可关闭：
 
 ```bash
 export GAME_CREATER_ALLOW_MOCK_PAID=0
 ```
 
-**当前版本是本地 Marketplace MVP，不是可直接公网运营的商城。** 正式上线前还需要用户账户、创作者身份、真实支付、退款/税务、分账、对象存储、签名下载、审核/投诉和多租户权限。
+**当前版本是本地 Marketplace MVP，不是可直接公网运营的商城。**
 
 ## 快速启动：Mock
 
@@ -209,17 +202,13 @@ GET    /api/v1/store/downloads/<entitlement_id>
 
 当前是 **localhost / local-first 开发工具**，不要直接把 FastAPI 开发服务器暴露到公网。
 
-正式多用户商店需要至少增加：
+正式多用户商店至少还需要：
 
 ```text
 身份认证 / RBAC
-数据库迁移
-真正支付 Provider
-Webhook 确认支付
+真正支付 Provider + Webhook
 创作者分账
-对象存储 / CDN
-签名下载 URL
-下载限流
+对象存储 / CDN / 签名下载
 税务 / 发票 / 退款
 授权条款
 内容审核 / 投诉
@@ -228,7 +217,7 @@ Webhook 确认支付
 
 ## CI
 
-Core CI 已覆盖并通过：
+Core CI 已覆盖：
 
 - Semantic / Asset Plan
 - Mock generation → automatic split
