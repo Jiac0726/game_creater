@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.asset_library_models import (
     AssetRelationRequest,
     AssetSearchResult,
+    BulkLibraryAssetPatch,
     CollectionMembershipRequest,
     CreateCollectionRequest,
     LibraryAsset,
@@ -69,6 +70,38 @@ def build_asset_library_router(workspace: str | Path) -> APIRouter:
             updated = library.patch(asset_id, patch)
             apply_library_metadata_to_scene(workspace, updated)
             return updated
+        except LibraryAssetNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Library asset not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/assets/bulk")
+    def bulk_patch_assets(request: BulkLibraryAssetPatch) -> dict:
+        updated_ids: list[str] = []
+        try:
+            for asset_id in request.asset_ids:
+                current = library.get(asset_id)
+                tags = list(current.tags)
+                if request.add_tags:
+                    existing = {value.lower() for value in tags}
+                    for tag in request.add_tags:
+                        clean = tag.strip()
+                        if clean and clean.lower() not in existing:
+                            existing.add(clean.lower())
+                            tags.append(clean)
+                if request.remove_tags:
+                    remove = {value.strip().lower() for value in request.remove_tags if value.strip()}
+                    tags = [value for value in tags if value.lower() not in remove]
+
+                patch_data: dict = {"tags": tags}
+                if request.review_state is not None:
+                    patch_data["review_state"] = request.review_state
+                if request.favorite is not None:
+                    patch_data["favorite"] = request.favorite
+                updated = library.patch(asset_id, LibraryAssetPatch(**patch_data))
+                apply_library_metadata_to_scene(workspace, updated)
+                updated_ids.append(asset_id)
+            return {"ok": True, "updated": updated_ids, "count": len(updated_ids)}
         except LibraryAssetNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Library asset not found") from exc
         except ValueError as exc:
