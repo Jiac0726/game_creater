@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/studio.css" />
 </head>
 <body>
-  <div class="app-root">
+  <div class="app-root" data-current-view="assets">
     <header class="topbar">
       <a class="brand" href="/" aria-label="Game Creater 首页">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -33,29 +33,22 @@
         <div id="health" class="status">连接中…</div>
         <button class="icon-button" type="button" title="帮助">?</button>
         <button class="icon-button" type="button" title="设置">⚙</button>
-        <a class="export-primary" href="#exportDock">导出 <span>⌄</span></a>
+        <a class="export-primary" href="#" data-view-jump="export">导出 <span>⌄</span></a>
       </div>
     </header>
 
     <nav class="rail" aria-label="主导航">
-      <button class="rail-item active" type="button" data-target="assetWorkspace"><span class="rail-icon">▰</span><span>素材库</span></button>
-      <button class="rail-item" type="button" data-target="viewerPanel"><span class="rail-icon">◫</span><span>场景</span></button>
-      <button class="rail-item" type="button" data-target="semanticPanel"><span class="rail-icon">✦</span><span>语义</span></button>
-      <button class="rail-item" type="button" data-target="taskDock"><span class="rail-icon">⇆</span><span>工作流</span></button>
-      <button class="rail-item" type="button" data-target="exportDock"><span class="rail-icon">⇩</span><span>导出</span></button>
+      <button class="rail-item active" type="button" data-view-name="assets"><span class="rail-icon">▰</span><span>素材库</span></button>
+      <button class="rail-item" type="button" data-view-name="scene"><span class="rail-icon">◫</span><span>场景</span></button>
+      <button class="rail-item" type="button" data-view-name="semantic"><span class="rail-icon">✦</span><span>语义</span></button>
+      <button class="rail-item" type="button" data-view-name="workflow"><span class="rail-icon">⇆</span><span>工作流</span></button>
+      <button class="rail-item" type="button" data-view-name="export"><span class="rail-icon">⇩</span><span>导出</span></button>
       <div class="rail-spacer"></div>
       <div class="rail-version">v0.6</div>
     </nav>
 
     <main class="studio-shell">
-      <section class="command-bar card" aria-label="素材拆解控制台">
-        <div class="command-title"><span class="command-kicker">ASSET PIPELINE</span><strong>素材拆解控制台</strong></div>
-        <label class="upload command-field"><span>场景图片</span><input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" /><b id="fileName">选择 PNG / JPG / WEBP</b></label>
-        <label class="command-field prompt-field"><span>目标关键词 · GroundingDINO Prompt</span><input id="promptInput" value="tree, rock, house, crate, grass" /></label>
-        <button id="analyzeBtn" class="analyze-button" type="button"><span>✦</span> AI 拆图</button>
-      </section>
-
-      <details id="semanticPanel" class="semantic-drawer card">
+      <details id="semanticPanel" class="semantic-drawer card view-hidden" data-view="semantic" open>
         <summary><span class="drawer-icon">⌘</span><span><strong>游戏素材语义联想</strong><small>中文概念 → 本地素材本体 → GroundingDINO 英文 Prompt</small></span><span class="semantic-badge">OFFLINE · NO API</span><span class="drawer-chevron">⌄</span></summary>
         <div class="semantic-panel">
           <div class="semantic-controls">
@@ -69,14 +62,40 @@
         </div>
       </details>
 
-      <section id="assetWorkspace" class="workspace">
+      <section id="assetWorkspace" class="workspace" data-view="assets,scene">
         <aside class="card panel library-panel">
           <div class="panel-title panel-title-rich"><span><b>素材库</b><small>PROJECT ASSETS</small></span><span class="panel-tools"><button title="筛选">≡</button><button title="刷新">↻</button></span></div>
-          <div class="library-tabs" role="tablist" aria-label="素材筛选"><button class="active" type="button">全部</button><button type="button">精灵</button><button type="button">背景</button><button type="button">UI</button></div>
-          <div class="library-folder-head"><span>当前场景</span><b id="assetCount">0 项</b></div>
-          <div id="selectionBar" class="selection-bar hidden"><span id="selectionCount">已选 0</span><button id="mergeSelectedBtn" disabled>合并选中</button></div>
-          <div id="assetList" class="asset-list empty"><div class="empty-state compact"><span class="empty-icon">▦</span><strong>素材库等待内容</strong><small>上传场景并运行 AI 拆图后，素材会出现在这里。</small></div></div>
-          <div class="library-foot"><span>支持 PNG · JPG · WEBP</span><span>本地优先</span></div>
+          <div class="library-main">
+            <div class="library-sidebar">
+              <button id="importToggle" class="library-ai-button" type="button"><span>✦</span> AI 拆图</button>
+              <div id="importPopover" class="import-popover hidden">
+                <div class="import-popover-head"><strong>新建拆图任务</strong><button id="importClose" type="button">×</button></div>
+                <label class="upload command-field"><span>场景图片</span><input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" /><b id="fileName">选择 PNG / JPG / WEBP</b></label>
+                <label class="command-field"><span>检测关键词</span><input id="promptInput" value="tree, rock, house, crate, grass" /></label>
+                <button id="analyzeBtn" class="analyze-button" type="button"><span>✦</span> 开始 AI 拆图</button>
+              </div>
+              <div class="library-tabs" role="tablist" aria-label="素材筛选"><button class="active" type="button">全部</button><button type="button">精灵</button><button type="button">背景</button><button type="button">UI</button></div>
+              <div class="taxonomy-title"><span>文件夹</span><button type="button">＋</button></div>
+              <div class="folder-tree">
+                <button type="button"><span>▰ 全部素材</span><b>1,248</b></button>
+                <button type="button"><span>▰ 场景</span><b>126</b></button>
+                <button type="button"><span>▰ 角色</span><b>243</b></button>
+                <button class="active" type="button"><span>▰ 建筑</span><b>312</b></button>
+                <button type="button"><span>▰ 植被</span><b>278</b></button>
+                <button type="button"><span>▰ 道具</span><b>187</b></button>
+                <button type="button"><span>▰ 特效</span><b>102</b></button>
+              </div>
+              <div class="taxonomy-title tags-title"><span>标签</span><button type="button">＋</button></div>
+              <div class="tag-list"><span><i class="tag-cyan"></i>building <b>312</b></span><span><i class="tag-green"></i>tree <b>278</b></span><span><i class="tag-orange"></i>prop <b>187</b></span><span><i class="tag-violet"></i>npc <b>243</b></span></div>
+            </div>
+            <div class="library-results">
+              <div class="asset-searchline"><label><span>⌕</span><input id="librarySearch" type="search" placeholder="搜索当前文件夹…" /></label><button type="button">▦</button><button type="button">☷</button></div>
+              <div class="library-folder-head"><span>建筑素材</span><b id="assetCount">0 项</b></div>
+              <div id="selectionBar" class="selection-bar hidden"><span id="selectionCount">已选 0</span><button id="mergeSelectedBtn" disabled>合并选中</button></div>
+              <div id="assetList" class="asset-list empty"><div class="empty-state compact"><span class="empty-icon">▦</span><strong>素材库等待内容</strong><small>点击左侧“AI 拆图”导入场景。</small></div></div>
+              <div class="library-foot"><span>共 <b id="libraryFootCount">0</b> 项</span><input type="range" min="60" max="120" value="88" aria-label="缩略图大小" /></div>
+            </div>
+          </div>
         </aside>
 
         <section id="viewerPanel" class="card panel viewer-panel">
@@ -90,6 +109,10 @@
             <div id="viewerHint" class="viewer-empty"><div class="viewer-orbit"><span>✦</span></div><strong>将场景拖入工作台</strong><p>从一张场景图开始，自动生成透明素材、Mask 与引擎导出包。</p><label class="viewer-upload" for="imageInput">选择场景图片</label></div>
           </div>
           <div class="canvas-statusbar"><span><i class="cyan-dot"></i> RGBA · 32 bit</span><span>拖拽矩形可辅助拆分</span><span>⌗ 适应窗口</span></div>
+          <div class="mini-task-queue">
+            <div class="mini-task-head"><span>任务队列 <b id="miniQueueCount">0</b></span><button type="button" data-view-jump="workflow">查看全部</button></div>
+            <div class="mini-task-row"><span class="mini-task-icon">✦</span><span><strong id="miniTaskName">等待场景任务</strong><small id="miniTaskDetail">AI 素材管线尚未启动</small></span><div class="mini-stages"><span data-mini-stage="detection">检测</span><i></i><span data-mini-stage="segmentation">分割</span><i></i><span data-mini-stage="refine">精修</span><i></i><span data-mini-stage="export">导出</span></div><b id="miniPipelinePercent">0%</b></div>
+          </div>
         </section>
 
         <aside class="card panel inspector-panel">
@@ -98,7 +121,7 @@
         </aside>
       </section>
 
-      <section id="taskDock" class="card task-dock">
+      <section id="taskDock" class="card task-dock view-hidden" data-view="workflow">
         <div class="task-head"><span><strong>任务队列</strong><b id="queueCount">0</b></span><div><button type="button">全部暂停</button><button type="button">清空队列</button></div></div>
         <div class="pipeline-row">
           <div class="pipeline-meta"><span class="task-thumb">✦</span><span><strong id="taskName">等待场景任务</strong><small id="taskDetail">上传图片后创建本地处理任务</small></span></div>
@@ -112,14 +135,40 @@
         </div>
       </section>
 
-      <section class="tool-drawer-grid">
+      <section class="tool-drawer-grid view-hidden" data-view="workflow">
         <details class="card tool-drawer"><summary><span><b>SAM2 点选修正</b><small>正点包含目标，负点排除背景</small></span><span id="samPointStatus" class="sam-point-status">未启用</span><i>⌄</i></summary><div class="sam-panel"><div class="sam-controls"><label><span>素材名称</span><input id="samLabelInput" placeholder="新建素材名称；精修时自动带入当前素材" /></label><div class="sam-actions"><button id="samNewBtn">新建素材</button><button id="samRefineBtn">精修当前素材</button></div><div class="sam-polarity"><button id="samPositiveBtn" disabled>正点 +</button><button id="samNegativeBtn" disabled>负点 −</button></div><div class="sam-actions"><button id="samClearBtn" disabled>清空点</button><button id="samRunBtn" disabled>生成 / 更新 Mask</button><button id="samCancelBtn" disabled>退出点选</button></div></div></div></details>
         <details class="card tool-drawer"><summary><span><b>BiRefNet 边缘优化</b><small>优化透明边缘，不改变二值 Mask</small></span><span id="edgeRefineStatus" class="edge-status">检查中…</span><i>⌄</i></summary><div class="edge-panel"><div class="edge-controls"><label><span>边界半径(px)</span><input id="edgeRadius" type="number" min="1" max="24" value="6" /></label><button id="edgeRefineBtn" disabled>BiRefNet 精修当前素材</button><div class="edge-note">BiRefNet 仅参与 SAM 边界带的软 Alpha，硬 Mask 仍用于合并、拆分和游戏配置。</div></div></div></details>
       </section>
 
-      <section id="exportDock" class="card footerbar">
+      <section id="exportDock" class="card export-page view-hidden" data-view="export">
+        <div class="export-heading">
+          <div><span class="command-kicker">DELIVERY CENTER</span><h1>导出与交付</h1><p>将当前场景、透明素材和元数据打包到目标游戏引擎。</p></div>
+          <span class="export-ready"><i></i> 本地导出器已就绪</span>
+        </div>
+        <div class="export-grid">
+          <article class="export-card featured">
+            <div class="engine-mark godot">G</div><div><span>推荐</span><h2>Godot 4 项目</h2><p>生成可直接打开的 Godot 4 工程、场景节点与素材引用。</p></div>
+            <a id="godotLink" class="hidden">导出 Godot 4</a>
+          </article>
+          <article class="export-card">
+            <div class="engine-mark unity">U</div><div><h2>Unity 2D 导入包</h2><p>包含 Sprite、元数据与适配 Unity 2D 的目录结构。</p></div>
+            <a id="unityLink" class="hidden">导出 Unity 2D</a>
+          </article>
+          <article class="export-card">
+            <div class="engine-mark package">ZIP</div><div><h2>通用素材包</h2><p>透明 PNG、Mask、Overlay 与 scene.json 的标准压缩包。</p></div>
+            <a id="archiveLink" class="hidden">下载素材 ZIP</a>
+          </article>
+          <article class="export-card">
+            <div class="engine-mark manifest">{ }</div><div><h2>场景清单</h2><p>检查素材坐标、分类、置信度和推理统计等结构化数据。</p></div>
+            <a id="manifestLink" class="hidden" target="_blank">打开 scene.json</a>
+          </article>
+        </div>
+        <div class="export-empty-note"><strong>还没有可导出的场景</strong><span>返回素材库上传场景并完成一次 AI 拆图，导出操作将在这里启用。</span><button type="button" data-view-jump="assets">前往素材库</button></div>
+      </section>
+
+      <section class="global-statusbar">
         <div class="message-area"><span class="message-light"></span><span id="message">先输入中文概念生成素材关键词，也可以直接上传图片并手动输入检测 Prompt。</span></div>
-        <div class="footer-actions"><a id="manifestLink" class="hidden" target="_blank">scene.json</a><a id="archiveLink" class="hidden">素材 ZIP</a><a id="godotLink" class="hidden">Godot 4</a><a id="unityLink" class="hidden">Unity 2D</a></div>
+        <span id="currentViewLabel">素材库</span>
       </section>
     </main>
   </div>

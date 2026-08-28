@@ -26,6 +26,20 @@ const taskDetail = $("taskDetail");
 const pipelinePercent = $("pipelinePercent");
 const pipelineBar = $("pipelineBar");
 const pipelineState = $("pipelineState");
+const librarySearch = $("librarySearch");
+const libraryFootCount = $("libraryFootCount");
+const importToggle = $("importToggle");
+const importPopover = $("importPopover");
+const importClose = $("importClose");
+const miniQueueCount = $("miniQueueCount");
+const miniTaskName = $("miniTaskName");
+const miniTaskDetail = $("miniTaskDetail");
+const miniPipelinePercent = $("miniPipelinePercent");
+const appRoot = document.querySelector(".app-root");
+const assetWorkspace = $("assetWorkspace");
+const semanticPanel = $("semanticPanel");
+const exportDock = $("exportDock");
+const currentViewLabel = $("currentViewLabel");
 
 const ASSET_CATEGORIES = [
   "uncategorized",
@@ -46,17 +60,32 @@ let currentSplitRect = null;
 let dragStart = null;
 const selectedAssetIds = new Set();
 let pipelineTimer = null;
+let assetSearchQuery = "";
 
 function setPipelineProgress(percent, state) {
   const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
   if (pipelinePercent) pipelinePercent.textContent = `${safePercent}%`;
   if (pipelineBar) pipelineBar.style.width = `${safePercent}%`;
   if (pipelineState) pipelineState.textContent = state;
+  if (miniPipelinePercent) miniPipelinePercent.textContent = `${safePercent}%`;
 }
 
 function resetPipelineStages() {
   document.querySelectorAll("[data-pipeline-stage]").forEach((stage) => {
     stage.classList.remove("running", "done", "failed");
+  });
+  document.querySelectorAll("[data-mini-stage]").forEach((stage) => {
+    stage.classList.remove("running", "done", "failed");
+  });
+}
+
+function setStageState(stageName, state) {
+  const pipelineStage = document.querySelector(`[data-pipeline-stage="${stageName}"]`);
+  const miniStage = document.querySelector(`[data-mini-stage="${stageName}"]`);
+  [pipelineStage, miniStage].forEach((stage) => {
+    if (!stage) return;
+    stage.classList.remove("running", "done", "failed");
+    if (state) stage.classList.add(state);
   });
 }
 
@@ -64,21 +93,22 @@ function startPipeline(file, prompts) {
   window.clearInterval(pipelineTimer);
   resetPipelineStages();
   if (queueCount) queueCount.textContent = "1";
+  if (miniQueueCount) miniQueueCount.textContent = "1";
   if (taskName) taskName.textContent = file?.name || "场景拆解任务";
   if (taskDetail) taskDetail.textContent = prompts || "自动识别游戏素材";
+  if (miniTaskName) miniTaskName.textContent = file?.name || "场景拆解任务";
+  if (miniTaskDetail) miniTaskDetail.textContent = prompts || "自动识别游戏素材";
 
   const stageNames = ["detection", "segmentation", "refine"];
   let stageIndex = 0;
   let progress = 12;
-  document.querySelector(`[data-pipeline-stage="${stageNames[0]}"]`)?.classList.add("running");
+  setStageState(stageNames[0], "running");
   setPipelineProgress(progress, "PROCESSING");
 
   pipelineTimer = window.setInterval(() => {
-    const current = document.querySelector(`[data-pipeline-stage="${stageNames[stageIndex]}"]`);
-    current?.classList.remove("running");
-    current?.classList.add("done");
+    setStageState(stageNames[stageIndex], "done");
     stageIndex = Math.min(stageIndex + 1, stageNames.length - 1);
-    document.querySelector(`[data-pipeline-stage="${stageNames[stageIndex]}"]`)?.classList.add("running");
+    setStageState(stageNames[stageIndex], "running");
     progress = Math.min(84, progress + 24);
     setPipelineProgress(progress, "PROCESSING");
     if (progress >= 84) window.clearInterval(pipelineTimer);
@@ -89,7 +119,9 @@ function finishPipeline(assetTotal) {
   window.clearInterval(pipelineTimer);
   resetPipelineStages();
   document.querySelectorAll("[data-pipeline-stage]").forEach((stage) => stage.classList.add("done"));
+  document.querySelectorAll("[data-mini-stage]").forEach((stage) => stage.classList.add("done"));
   if (taskDetail) taskDetail.textContent = `完成 ${assetTotal} 个素材 · 可导出至 Godot / Unity`;
+  if (miniTaskDetail) miniTaskDetail.textContent = `完成 ${assetTotal} 个素材 · 可导出`;
   setPipelineProgress(100, "COMPLETE");
 }
 
@@ -98,18 +130,28 @@ function failPipeline(detail) {
   const running = document.querySelector("[data-pipeline-stage].running") || document.querySelector("[data-pipeline-stage]");
   running?.classList.remove("running");
   running?.classList.add("failed");
+  document.querySelector("[data-mini-stage].running")?.classList.replace("running", "failed");
   if (taskDetail) taskDetail.textContent = detail || "任务处理失败";
+  if (miniTaskDetail) miniTaskDetail.textContent = detail || "任务处理失败";
   setPipelineProgress(Number.parseInt(pipelinePercent?.textContent || "0", 10), "FAILED");
 }
 
 function filterAssetRows() {
-  const query = (globalSearch?.value || "").trim().toLocaleLowerCase();
+  const query = assetSearchQuery.trim().toLocaleLowerCase();
   document.querySelectorAll(".asset-row-shell").forEach((row) => {
     row.hidden = Boolean(query) && !row.textContent.toLocaleLowerCase().includes(query);
   });
 }
 
-globalSearch?.addEventListener("input", filterAssetRows);
+function updateAssetSearch(value, source) {
+  assetSearchQuery = value;
+  if (source !== globalSearch && globalSearch) globalSearch.value = value;
+  if (source !== librarySearch && librarySearch) librarySearch.value = value;
+  filterAssetRows();
+}
+
+globalSearch?.addEventListener("input", () => updateAssetSearch(globalSearch.value, globalSearch));
+librarySearch?.addEventListener("input", () => updateAssetSearch(librarySearch.value, librarySearch));
 window.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") {
     event.preventDefault();
@@ -118,14 +160,41 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
-document.querySelectorAll(".rail-item[data-target]").forEach((item) => {
-  item.addEventListener("click", () => {
-    const target = $(item.dataset.target);
-    if (!target) return;
-    if (target.tagName === "DETAILS") target.open = true;
-    document.querySelectorAll(".rail-item").forEach((candidate) => candidate.classList.remove("active"));
-    item.classList.add("active");
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
+const VIEW_LABELS = {
+  assets: "素材库",
+  scene: "场景工作台",
+  semantic: "语义联想",
+  workflow: "工作流",
+  export: "导出与交付",
+};
+
+function activateView(viewName) {
+  const nextView = VIEW_LABELS[viewName] ? viewName : "assets";
+  if (appRoot) appRoot.dataset.currentView = nextView;
+  document.querySelectorAll("[data-view]").forEach((panel) => {
+    const supportedViews = panel.dataset.view.split(",");
+    panel.classList.toggle("view-hidden", !supportedViews.includes(nextView));
+  });
+  document.querySelectorAll(".rail-item[data-view-name]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.viewName === nextView);
+  });
+  assetWorkspace?.classList.toggle("scene-focus", nextView === "scene");
+  if (nextView === "semantic" && semanticPanel) semanticPanel.open = true;
+  if (currentViewLabel) currentViewLabel.textContent = VIEW_LABELS[nextView];
+  window.requestAnimationFrame(() => {
+    syncSelectionCanvas();
+    drawCurrentSelection();
+  });
+}
+
+document.querySelectorAll(".rail-item[data-view-name]").forEach((item) => {
+  item.addEventListener("click", () => activateView(item.dataset.viewName));
+});
+
+document.querySelectorAll("[data-view-jump]").forEach((item) => {
+  item.addEventListener("click", (event) => {
+    event.preventDefault();
+    activateView(item.dataset.viewJump);
   });
 });
 
@@ -134,6 +203,12 @@ document.querySelectorAll(".library-tabs button").forEach((button) => {
     document.querySelectorAll(".library-tabs button").forEach((candidate) => candidate.classList.remove("active"));
     button.classList.add("active");
   });
+});
+
+importToggle?.addEventListener("click", () => importPopover?.classList.toggle("hidden"));
+importClose?.addEventListener("click", () => importPopover?.classList.add("hidden"));
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") importPopover?.classList.add("hidden");
 });
 
 async function loadHealth() {
@@ -179,9 +254,14 @@ imageInput.addEventListener("change", () => {
   clearSelectionCanvas();
   manifestLink.classList.add("hidden");
   archiveLink.classList.add("hidden");
+  $("godotLink")?.classList.add("hidden");
+  $("unityLink")?.classList.add("hidden");
+  exportDock?.classList.remove("ready");
   fileName.textContent = file.name;
   if (taskName) taskName.textContent = file.name;
   if (taskDetail) taskDetail.textContent = "已载入场景，等待启动 AI 拆图";
+  if (miniTaskName) miniTaskName.textContent = file.name;
+  if (miniTaskDetail) miniTaskDetail.textContent = "场景已载入，等待启动";
 
   if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
   localPreviewUrl = URL.createObjectURL(file);
@@ -257,6 +337,7 @@ analyzeBtn.addEventListener("click", async () => {
   analyzeBtn.textContent = "拆解中…";
   message.textContent = "正在生成检测结果、Mask、透明 PNG、Overlay 和 scene.json…";
   startPipeline(file, promptInput.value);
+  importPopover?.classList.add("hidden");
 
   try {
     const response = await fetch("/api/v1/scenes/analyze", { method: "POST", body: form });
@@ -273,7 +354,7 @@ analyzeBtn.addEventListener("click", async () => {
     failPipeline(error.message);
   } finally {
     analyzeBtn.disabled = false;
-    analyzeBtn.textContent = "AI 拆解";
+    analyzeBtn.textContent = "✦ 开始 AI 拆图";
     loadHealth();
   }
 });
@@ -320,6 +401,7 @@ function renderAssets(manifest, selectedAssetId = null) {
   assetPreview.classList.remove("empty");
   updateSelectionBar();
   if (assetCount) assetCount.textContent = `${manifest.assets.length} 项`;
+  if (libraryFootCount) libraryFootCount.textContent = String(manifest.assets.length);
 
   if (!manifest.assets.length) {
     assetList.classList.add("empty");
@@ -330,6 +412,7 @@ function renderAssets(manifest, selectedAssetId = null) {
   }
 
   const preferredId = selectedAssetId || manifest.assets[0].id;
+  const base = `/workspace/${manifest.scene_id}/`;
 
   manifest.assets.forEach((asset) => {
     const row = document.createElement("div");
@@ -350,8 +433,9 @@ function renderAssets(manifest, selectedAssetId = null) {
     button.className = "asset-row";
     const score = Math.round((asset.asset_score || 0) * 100);
     button.innerHTML = `
+      <img class="asset-thumb" src="${base}${asset.image}?v=${Date.now()}" alt="" />
       <span>${escapeHtml(asset.label)}</span>
-      <small>${escapeHtml(asset.category || "uncategorized")} · S${score}</small>
+      <small>S${score}</small>
     `;
     button.addEventListener("click", () => {
       document.querySelectorAll(".asset-row").forEach((el) => el.classList.remove("selected"));
@@ -552,6 +636,7 @@ function applyManifest(manifest, selectedAssetId = null) {
   manifestLink.classList.remove("hidden");
   archiveLink.href = `/api/v1/scenes/${manifest.scene_id}/export.zip`;
   archiveLink.classList.remove("hidden");
+  exportDock?.classList.add("ready");
 }
 
 function refreshOverlay(manifest) {
@@ -642,4 +727,5 @@ function escapeAttribute(value) {
   return escapeHtml(value).replace(/`/g, "&#096;");
 }
 
+activateView(appRoot?.dataset.currentView || "assets");
 loadHealth();
