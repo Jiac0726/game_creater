@@ -4,6 +4,7 @@ from app.completion_models import AssetCompletionRequest
 from app.models import BBox
 from app.services.completion_service import CompletionService
 from app.services.pipeline import AssetSplitPipeline
+from app.services.scene_store import SceneStore
 from app.services.workflow_manager import WorkflowManager
 from app.workflow_models import RunProjectRequest, WorkflowStage
 
@@ -78,13 +79,7 @@ def test_completion_result_is_recorded_back_into_project_history(tmp_path, monke
         )
     )
     assert project.scene_id
-
-    scene = manager.pipeline.workspace / project.scene_id / "scene.json"
-    assert scene.is_file()
-    manifest = manager.pipeline.run.__self__  # keep pipeline object explicitly referenced for clarity
-    del manifest
-
-    from app.services.scene_store import SceneStore
+    assert (workspace / project.scene_id / "scene.json").is_file()
 
     scene_manifest = SceneStore(workspace).load(project.scene_id)
     asset = scene_manifest.assets[0]
@@ -92,7 +87,13 @@ def test_completion_result_is_recorded_back_into_project_history(tmp_path, monke
         x1=asset.bbox.x1,
         y1=asset.bbox.y1,
         x2=asset.bbox.x2,
-        y2=max(asset.bbox.y1 + 1, min(asset.bbox.y2, asset.bbox.y1 + max(2, (asset.bbox.y2 - asset.bbox.y1) // 4))),
+        y2=max(
+            asset.bbox.y1 + 1,
+            min(
+                asset.bbox.y2,
+                asset.bbox.y1 + max(2, (asset.bbox.y2 - asset.bbox.y1) // 4),
+            ),
+        ),
     )
 
     result = CompletionService(workspace, pipeline).complete(
