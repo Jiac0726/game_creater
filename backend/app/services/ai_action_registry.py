@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import re
 from typing import Any
 
@@ -42,7 +43,9 @@ class AIActionRegistry:
         return AIActionCatalog(actions=actions, total=len(actions))
 
     def tools(self) -> AIToolCatalog:
-        tools = [self._to_tool(action) for action in self.catalog().actions]
+        openapi = self.app.openapi()
+        components = (openapi.get("components") or {}).get("schemas") or {}
+        tools = [self._to_tool(action, components) for action in self.catalog().actions]
         return AIToolCatalog(tools=tools, total=len(tools))
 
     def get(self, action_id: str) -> AIActionDescriptor:
@@ -87,8 +90,7 @@ class AIActionRegistry:
             return AIRiskLevel.WRITE, False
         return AIRiskLevel.READ, False
 
-    @staticmethod
-    def _to_tool(action: AIActionDescriptor) -> AIToolDefinition:
+    def _to_tool(self, action: AIActionDescriptor, components: dict[str, Any]) -> AIToolDefinition:
         properties: dict[str, Any] = {}
         required: list[str] = []
 
@@ -96,8 +98,9 @@ class AIActionRegistry:
             name = parameter.get("name")
             if not name:
                 continue
-            properties[name] = parameter.get("schema") or {"type": "string"}
-            properties[name]["description"] = parameter.get("description") or f"{parameter.get('in', 'request')} parameter"
+            parameter_schema = self._resolve_schema(parameter.get("schema") or {"type": "string"}, components)
+            parameter_schema["description"] = parameter.get("description") or f"{parameter.get('in', 'request')} parameter"
+            properties[name] = parameter_schema
             if parameter.get("required"):
                 required.append(name)
 
@@ -106,7 +109,10 @@ class AIActionRegistry:
             content = action.request_body.get("content") or {}
             for content_type in ("application/json", "multipart/form-data", "application/x-www-form-urlencoded"):
                 if content_type in content:
-                    body_schema = content[content_type].get("schema") or {"type": "object"}
+                    body_schema = self._resolve_schema(
+                        content[content_type].get("schema") or {"type": "object"},
+                        components,
+                    )
                     break
         if body_schema is not None:
             properties["body"] = body_schema
@@ -137,3 +143,35 @@ class AIActionRegistry:
                 "x-requires-confirmation": action.requires_confirmation,
             }
         )
+
+    def _resolve_schema(
+        self,
+        value: Any,
+        components: dict[str, Any],
+        seen: tuple[str, ...] = (),
+    ) -> Any:
+        if isinstance(value, list):
+            return [self._resolve_schema(item, components, seen) for item in value]
+        if not isinstance(value, dict):
+            return value
+
+        ref = value.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/components/schemas/"):
+            name = ref.rsplit("/", 1)[-1]
+            if name in seen:
+                return {
+                    "type": "object",
+                    "description": f"Recursive reference to {name}",
+                }
+            target = components.get(name)
+            if isinstance(target, dict):
+                merged = copy.deepcopy(target)
+                for key, item in value.items():
+                    if key != "$ref":
+                        merged[key] = copy.deepcopy(item)
+                return self._resolve_schema(merged, components, seen + (name,))
+
+        return {
+            key: self._resolve_schema(item, components, seen)
+            for key, item in copy.deepcopy(value).items()
+        }
