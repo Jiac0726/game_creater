@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,6 +12,8 @@ from app.asset_2d_models import (
     AnimationClip,
     AnimationClipCreateRequest,
     AnimationClipPatch,
+    AnimationFrameSequenceRequest,
+    AutoTileMode,
     CollisionPoint,
     CollisionPolygon,
     CollisionPolygonGenerateRequest,
@@ -18,11 +21,16 @@ from app.asset_2d_models import (
     TileSetCreateRequest,
     TileSetDefinition,
     TileSetPatch,
+    TileTerrainRule,
 )
 from app.services.asset_library import AssetLibrary, utc_now
 
 
 class Asset2DResourceService:
+    # Neighbor bit order is clockwise from north:
+    # N=1, NE=2, E=4, SE=8, S=16, SW=32, W=64, NW=128.
+    CARDINAL_MASK = 1 | 4 | 16 | 64
+
     def __init__(self, workspace: str | Path) -> None:
         self.workspace = Path(workspace)
         self.library = AssetLibrary(self.workspace)
@@ -63,11 +71,18 @@ class Asset2DResourceService:
                     tile_width INTEGER NOT NULL,
                     tile_height INTEGER NOT NULL,
                     terrain_tags_json TEXT NOT NULL,
+                    autotile_mode TEXT NOT NULL DEFAULT 'none',
+                    terrain_rules_json TEXT NOT NULL DEFAULT '[]',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(asset_tilesets)").fetchall()}
+            if "autotile_mode" not in columns:
+                db.execute("ALTER TABLE asset_tilesets ADD COLUMN autotile_mode TEXT NOT NULL DEFAULT 'none'")
+            if "terrain_rules_json" not in columns:
+                db.execute("ALTER TABLE asset_tilesets ADD COLUMN terrain_rules_json TEXT NOT NULL DEFAULT '[]'")
 
     # ----------------------------- collision polygon -----------------------------
 
@@ -187,6 +202,16 @@ class Asset2DResourceService:
             )
         return self.get_animation(clip_id)
 
+    def set_animation_frames(self, clip_id: str, request: AnimationFrameSequenceRequest) -> AnimationClip:
+        current = self.get_animation(clip_id)
+        self._validate_assets(request.frame_asset_ids)
+        if request.require_same_frames and Counter(current.frame_asset_ids) != Counter(request.frame_asset_ids):
+            raise ValueError("Frame reorder must preserve the same frame multiset")
+        return self.patch_animation(
+            clip_id,
+            AnimationClipPatch(frame_asset_ids=request.frame_asset_ids),
+        )
+
     # --------------------------------- tilesets ---------------------------------
 
     def create_tileset(self, request: TileSetCreateRequest) -> TileSetDefinition:
@@ -195,16 +220,18 @@ class Asset2DResourceService:
             raise ValueError("TileSet name cannot be empty")
         asset_ids = list(dict.fromkeys(request.tile_asset_ids))
         self._validate_assets(asset_ids)
+        mode = request.autotile_mode
+        rules = self._normalize_terrain_rules(asset_ids, mode, request.terrain_rules)
+        tags = self._clean_tags([*request.terrain_tags, *(rule.terrain for rule in rules)])
         now = utc_now()
         tileset_id = f"tileset_{uuid4().hex[:12]}"
-        tags = self._clean_tags(request.terrain_tags)
         with self.library._connect() as db:
             db.execute(
                 """
                 INSERT INTO asset_tilesets(
                     id,name,tile_asset_ids_json,tile_width,tile_height,
-                    terrain_tags_json,created_at,updated_at
-                ) VALUES (?,?,?,?,?,?,?,?)
+                    terrain_tags_json,autotile_mode,terrain_rules_json,created_at,updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     tileset_id,
@@ -213,6 +240,8 @@ class Asset2DResourceService:
                     request.tile_width,
                     request.tile_height,
                     json.dumps(tags, ensure_ascii=False),
+                    mode.value,
+                    json.dumps([rule.model_dump(mode="json") for rule in rules], ensure_ascii=False),
                     now,
                     now,
                 ),
@@ -238,17 +267,29 @@ class Asset2DResourceService:
             values["name"] = (values["name"] or "").strip()
             if not values["name"]:
                 raise ValueError("TileSet name cannot be empty")
-        if "tile_asset_ids" in values:
-            ids = list(dict.fromkeys(values.pop("tile_asset_ids")))
-            self._validate_assets(ids)
-            values["tile_asset_ids_json"] = json.dumps(ids)
-        if "terrain_tags" in values:
-            values["terrain_tags_json"] = json.dumps(
-                self._clean_tags(values.pop("terrain_tags") or []),
-                ensure_ascii=False,
-            )
-        if not values:
-            return current
+
+        asset_ids = values.pop("tile_asset_ids", current.tile_asset_ids)
+        asset_ids = list(dict.fromkeys(asset_ids))
+        self._validate_assets(asset_ids)
+        mode_value = values.pop("autotile_mode", current.autotile_mode)
+        mode = mode_value if isinstance(mode_value, AutoTileMode) else AutoTileMode(mode_value)
+        rules_value = values.pop("terrain_rules", current.terrain_rules)
+        rules = [item if isinstance(item, TileTerrainRule) else TileTerrainRule(**item) for item in rules_value]
+        rules = self._normalize_terrain_rules(asset_ids, mode, rules)
+
+        tags_value = values.pop("terrain_tags", current.terrain_tags)
+        tags = self._clean_tags([*tags_value, *(rule.terrain for rule in rules)])
+        values.update(
+            {
+                "tile_asset_ids_json": json.dumps(asset_ids),
+                "terrain_tags_json": json.dumps(tags, ensure_ascii=False),
+                "autotile_mode": mode.value,
+                "terrain_rules_json": json.dumps(
+                    [rule.model_dump(mode="json") for rule in rules],
+                    ensure_ascii=False,
+                ),
+            }
+        )
         values["updated_at"] = utc_now()
         with self.library._connect() as db:
             assignments = ", ".join(f"{key}=?" for key in values)
@@ -263,6 +304,40 @@ class Asset2DResourceService:
     def _validate_assets(self, asset_ids: list[str]) -> None:
         for asset_id in asset_ids:
             self.library.get(asset_id)
+
+    def _normalize_terrain_rules(
+        self,
+        asset_ids: list[str],
+        mode: AutoTileMode,
+        rules: list[TileTerrainRule],
+    ) -> list[TileTerrainRule]:
+        if rules and mode == AutoTileMode.NONE:
+            raise ValueError("Autotile terrain rules require cardinal4 or eight8 mode")
+        allowed_assets = set(asset_ids)
+        result: list[TileTerrainRule] = []
+        seen_assets: set[str] = set()
+        for raw in rules:
+            rule = raw if isinstance(raw, TileTerrainRule) else TileTerrainRule(**raw)
+            if rule.asset_id not in allowed_assets:
+                raise ValueError(f"Terrain rule asset {rule.asset_id!r} is not part of the TileSet")
+            terrain = rule.terrain.strip()
+            if not terrain:
+                raise ValueError("Terrain rule terrain cannot be empty")
+            if rule.asset_id in seen_assets:
+                raise ValueError(f"Only one autotile rule is allowed per tile asset: {rule.asset_id}")
+            if mode == AutoTileMode.CARDINAL4 and rule.neighbor_mask & ~self.CARDINAL_MASK:
+                raise ValueError("cardinal4 rules may only use N/E/S/W neighbor bits")
+            seen_assets.add(rule.asset_id)
+            result.append(
+                TileTerrainRule(
+                    asset_id=rule.asset_id,
+                    terrain=terrain,
+                    neighbor_mask=rule.neighbor_mask,
+                    priority=rule.priority,
+                )
+            )
+        result.sort(key=lambda item: (-item.priority, item.asset_id))
+        return result
 
     @staticmethod
     def _clean_tags(values: list[str]) -> list[str]:
@@ -353,6 +428,9 @@ class Asset2DResourceService:
 
     @staticmethod
     def _hydrate_tileset(row) -> TileSetDefinition:
+        keys = set(row.keys())
+        mode = AutoTileMode(row["autotile_mode"] if "autotile_mode" in keys else "none")
+        rules_payload = json.loads(row["terrain_rules_json"] or "[]") if "terrain_rules_json" in keys else []
         return TileSetDefinition(
             id=row["id"],
             name=row["name"],
@@ -360,6 +438,8 @@ class Asset2DResourceService:
             tile_width=int(row["tile_width"]),
             tile_height=int(row["tile_height"]),
             terrain_tags=json.loads(row["terrain_tags_json"] or "[]"),
+            autotile_mode=mode,
+            terrain_rules=[TileTerrainRule(**item) for item in rules_payload],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
