@@ -46,6 +46,13 @@ const assetWorkspace = $("assetWorkspace");
 const semanticPanel = $("semanticPanel");
 const exportDock = $("exportDock");
 const currentViewLabel = $("currentViewLabel");
+const flowStepTitle = $("flowStepTitle");
+const flowContext = $("flowContext");
+const overviewSceneCount = $("overviewSceneCount");
+const overviewAssetCount = $("overviewAssetCount");
+const overviewLibraryCount = $("overviewLibraryCount");
+const overviewCurrentScene = $("overviewCurrentScene");
+const overviewProjectName = $("overviewProjectName");
 
 const ASSET_CATEGORIES = [
   "uncategorized",
@@ -181,17 +188,43 @@ window.addEventListener("keydown", (event) => {
 });
 
 const VIEW_LABELS = {
+  project: "项目总览",
   assets: "素材库",
-  scene: "场景工作台",
-  semantic: "语义联想",
-  workflow: "工作流",
+  scene: "素材详情",
+  semantic: "AI 辅助",
+  workflow: "处理工具",
   "global-library": "高级素材库",
   store: "素材商店",
-  export: "导出与交付",
+  export: "场景 / 导出",
 };
 
+const FLOW_STEPS = ["project", "assets", "scene", "workflow", "export"];
+const FLOW_CONTEXTS = {
+  project: "从当前项目开始，先确认项目文件范围，再进入素材库。",
+  assets: "浏览项目内素材；选中素材后进入详情，或进入处理工具执行批量操作。",
+  scene: "当前素材的预览、Mask、元数据和拆分操作都在这里完成。",
+  workflow: "对选中素材进行拆图、修正、版本管理和 2D 配置，完成后进入导出。",
+  export: "确认素材和场景状态后，生成 Godot、Unity 或通用素材包。",
+  semantic: "辅助模块：从中文概念生成检测关键词，再回到处理工具。",
+  "global-library": "辅助模块：跨场景全局索引、Collection、批量维护和版本检查。",
+  store: "辅助模块：本地示例素材上架、购物车和授权下载流程。",
+};
+
+function updateWorkflowPath(viewName) {
+  const nextView = VIEW_LABELS[viewName] ? viewName : "project";
+  const activeFlow = FLOW_STEPS.includes(nextView) ? nextView : (nextView === "semantic" ? "assets" : "workflow");
+  const activeIndex = FLOW_STEPS.indexOf(activeFlow);
+  document.querySelectorAll("[data-flow-step]").forEach((step) => {
+    const index = FLOW_STEPS.indexOf(step.dataset.flowStep);
+    step.classList.toggle("active", step.dataset.flowStep === activeFlow);
+    step.classList.toggle("done", index >= 0 && index < activeIndex);
+  });
+  if (flowStepTitle) flowStepTitle.textContent = VIEW_LABELS[nextView];
+  if (flowContext) flowContext.textContent = FLOW_CONTEXTS[nextView] || FLOW_CONTEXTS.project;
+}
+
 function activateView(viewName) {
-  const nextView = VIEW_LABELS[viewName] ? viewName : "assets";
+  const nextView = VIEW_LABELS[viewName] ? viewName : "project";
   if (appRoot) appRoot.dataset.currentView = nextView;
   document.querySelectorAll("[data-view]").forEach((panel) => {
     const supportedViews = panel.dataset.view.split(",");
@@ -203,6 +236,7 @@ function activateView(viewName) {
   assetWorkspace?.classList.toggle("scene-focus", nextView === "scene");
   if (nextView === "semantic" && semanticPanel) semanticPanel.open = true;
   if (currentViewLabel) currentViewLabel.textContent = VIEW_LABELS[nextView];
+  updateWorkflowPath(nextView);
   window.requestAnimationFrame(() => {
     syncSelectionCanvas();
     drawCurrentSelection();
@@ -219,6 +253,8 @@ document.querySelectorAll("[data-view-jump]").forEach((item) => {
     activateView(item.dataset.viewJump);
   });
 });
+
+document.querySelector(".project-switcher")?.addEventListener("click", () => activateView("project"));
 
 document.querySelectorAll(".library-tabs button[data-tab-filter]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -279,6 +315,8 @@ async function loadLibraryIndex(restoreLatest = false) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "素材库读取失败");
     libraryData = data;
+    if (overviewSceneCount) overviewSceneCount.textContent = String(data.scenes?.length || 0);
+    if (overviewAssetCount) overviewAssetCount.textContent = String(data.asset_count || 0);
     renderSceneFiles();
     if (restoreLatest && !currentManifest && data.scenes.length) {
       await loadSceneFromLibrary(data.scenes[0].scene_id);
@@ -288,6 +326,18 @@ async function loadLibraryIndex(restoreLatest = false) {
     message.textContent = `素材库读取失败：${error.message}`;
   } finally {
     refreshLibraryBtn?.classList.remove("spinning");
+  }
+}
+
+async function loadLibraryStats() {
+  if (!overviewLibraryCount) return;
+  try {
+    const response = await fetch("/api/v1/library/stats");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "全局库统计读取失败");
+    overviewLibraryCount.textContent = String(data.total_assets || 0);
+  } catch {
+    overviewLibraryCount.textContent = "—";
   }
 }
 
@@ -771,6 +821,8 @@ function applyManifest(manifest, selectedAssetId = null) {
   renderSceneFiles();
   const projectTitle = document.querySelector(".project-switcher strong");
   if (projectTitle) projectTitle.textContent = sceneTitle(manifest);
+  if (overviewProjectName) overviewProjectName.textContent = sceneTitle(manifest);
+  if (overviewCurrentScene) overviewCurrentScene.textContent = `${sceneTitle(manifest)} · ${manifest.assets.length} 个素材`;
   refreshOverlay(manifest);
 
   manifestLink.href = `/workspace/${manifest.scene_id}/scene.json?v=${Date.now()}`;
@@ -868,6 +920,7 @@ function escapeAttribute(value) {
   return escapeHtml(value).replace(/`/g, "&#096;");
 }
 
-activateView(appRoot?.dataset.currentView || "assets");
+activateView(appRoot?.dataset.currentView || "project");
 loadHealth();
 loadLibraryIndex(true);
+loadLibraryStats();

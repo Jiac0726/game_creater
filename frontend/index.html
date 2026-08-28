@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/studio.css" />
 </head>
 <body>
-  <div class="app-root" data-current-view="assets">
+  <div class="app-root" data-current-view="project">
     <header class="topbar">
       <a class="brand" href="/" aria-label="Game Creater 首页">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -38,18 +38,61 @@
     </header>
 
     <nav class="rail" aria-label="主导航">
-      <button class="rail-item active" type="button" data-view-name="assets"><span class="rail-icon">▰</span><span>素材库</span></button>
-      <button class="rail-item" type="button" data-view-name="scene"><span class="rail-icon">◫</span><span>场景</span></button>
-      <button class="rail-item" type="button" data-view-name="semantic"><span class="rail-icon">✦</span><span>语义</span></button>
-      <button class="rail-item" type="button" data-view-name="workflow"><span class="rail-icon">⇆</span><span>工作流</span></button>
-      <button class="rail-item" type="button" data-view-name="global-library"><span class="rail-icon">◆</span><span>高级库</span></button>
-      <button class="rail-item" type="button" data-view-name="store"><span class="rail-icon">◇</span><span>商店</span></button>
-      <button class="rail-item" type="button" data-view-name="export"><span class="rail-icon">⇩</span><span>导出</span></button>
+      <div class="rail-group-label">核心路径</div>
+      <button class="rail-item active" type="button" data-view-name="project"><span class="rail-icon">⌂</span><span>项目</span></button>
+      <button class="rail-item" type="button" data-view-name="assets"><span class="rail-icon">▰</span><span>素材库</span></button>
+      <button class="rail-item" type="button" data-view-name="scene"><span class="rail-icon">◎</span><span>素材详情</span></button>
+      <button class="rail-item" type="button" data-view-name="workflow"><span class="rail-icon">⇆</span><span>处理工具</span></button>
+      <button class="rail-item" type="button" data-view-name="export"><span class="rail-icon">⇩</span><span>场景 / 导出</span></button>
+      <div class="rail-divider"></div>
+      <div class="rail-group-label">辅助模块</div>
+      <button class="rail-item rail-secondary" type="button" data-view-name="semantic"><span class="rail-icon">✦</span><span>AI 辅助</span></button>
+      <button class="rail-item rail-secondary" type="button" data-view-name="global-library"><span class="rail-icon">◆</span><span>库维护</span></button>
+      <button class="rail-item rail-secondary" type="button" data-view-name="store"><span class="rail-icon">◇</span><span>素材商店</span></button>
       <div class="rail-spacer"></div>
       <div class="rail-version">v1.1</div>
     </nav>
 
     <main class="studio-shell">
+      <section class="workflow-path" aria-label="项目工作路径">
+        <div class="workflow-path-title"><span>PROJECT FLOW</span><strong id="flowStepTitle">项目总览</strong></div>
+        <div class="workflow-path-steps">
+          <button type="button" class="flow-step active" data-flow-step="project" data-view-jump="project"><i>01</i><span>项目</span></button>
+          <b></b>
+          <button type="button" class="flow-step" data-flow-step="assets" data-view-jump="assets"><i>02</i><span>素材库</span></button>
+          <b></b>
+          <button type="button" class="flow-step" data-flow-step="scene" data-view-jump="scene"><i>03</i><span>素材详情</span></button>
+          <b></b>
+          <button type="button" class="flow-step" data-flow-step="workflow" data-view-jump="workflow"><i>04</i><span>处理</span></button>
+          <b></b>
+          <button type="button" class="flow-step" data-flow-step="export" data-view-jump="export"><i>05</i><span>场景 / 导出</span></button>
+        </div>
+        <p id="flowContext">从当前项目开始，先确认项目文件范围，再进入素材库。</p>
+      </section>
+
+      <section id="projectOverview" class="project-overview view-hidden" data-view="project">
+        <div class="overview-hero card">
+          <div>
+            <span class="command-kicker">PROJECT WORKSPACE</span>
+            <h1>项目素材工作台</h1>
+            <p>所有素材都从当前项目出发，经过管理、处理和检查后，再进入场景或引擎导出。</p>
+          </div>
+          <div class="overview-project-chip"><span class="project-dot"></span><div><small>当前项目</small><strong id="overviewProjectName">森林村落</strong><code id="overviewProjectPath">workspace/</code></div></div>
+        </div>
+        <div class="overview-stats">
+          <article class="overview-stat card"><span>项目场景</span><strong id="overviewSceneCount">0</strong><small>只读取 workspace/</small></article>
+          <article class="overview-stat card"><span>当前场景素材</span><strong id="overviewAssetCount">0</strong><small id="overviewCurrentScene">尚未选择场景</small></article>
+          <article class="overview-stat card"><span>全局素材库</span><strong id="overviewLibraryCount">0</strong><small>Tiny Swords 示例库 · 可在库维护中筛选</small></article>
+        </div>
+        <div class="overview-grid">
+          <article class="overview-card card overview-card-primary"><div class="overview-card-icon">▰</div><div><span class="overview-index">01 · 先从这里开始</span><h2>浏览项目素材</h2><p>查看场景文件、来源包、文件夹、标签和缩略图，所有路径都显示为项目内相对路径。</p><button type="button" data-view-jump="assets">打开素材库 <b>→</b></button></div></article>
+          <article class="overview-card card"><div class="overview-card-icon">◎</div><div><span class="overview-index">02 · 选中后继续</span><h2>查看素材详情</h2><p>预览透明 PNG、Mask 和来源信息，并编辑名称、分类、备注或拆分矩形。</p><button type="button" data-view-jump="scene">查看当前素材 <b>→</b></button></div></article>
+          <article class="overview-card card"><div class="overview-card-icon">⇆</div><div><span class="overview-index">03 · 需要时处理</span><h2>批量处理与版本</h2><p>执行 AI 拆图、SAM 修正、边缘优化、补全、批量维护和 2D 运行时配置。</p><button type="button" data-view-jump="workflow">进入处理工具 <b>→</b></button></div></article>
+          <article class="overview-card card"><div class="overview-card-icon">⇩</div><div><span class="overview-index">04 · 最后交付</span><h2>场景与引擎导出</h2><p>完成检查后，生成 Godot 4、Unity 2D 或通用素材包，不改变原始素材历史。</p><button type="button" data-view-jump="export">打开导出中心 <b>→</b></button></div></article>
+        </div>
+        <div class="overview-footer card"><div><strong>辅助模块</strong><span>AI 辅助用于生成关键词；库维护用于全局批量管理；素材商店用于本地示例交易流程。</span></div><div><button type="button" data-view-jump="semantic">AI 辅助</button><button type="button" data-view-jump="global-library">库维护</button><button type="button" data-view-jump="store">素材商店</button></div></div>
+      </section>
+
       <details id="semanticPanel" class="semantic-drawer card view-hidden" data-view="semantic" open>
         <summary><span class="drawer-icon">⌘</span><span><strong>游戏素材语义联想</strong><small>中文概念 → 本地素材本体 → GroundingDINO 英文 Prompt</small></span><span class="semantic-badge">OFFLINE · NO API</span><span class="drawer-chevron">⌄</span></summary>
         <div class="semantic-panel">
@@ -66,7 +109,7 @@
 
       <section id="assetWorkspace" class="workspace" data-view="assets,scene">
         <aside class="card panel library-panel">
-          <div class="panel-title panel-title-rich"><span><b>素材库</b><small>PROJECT ASSETS</small></span><span class="panel-tools"><button title="筛选">≡</button><button id="refreshLibraryBtn" title="刷新素材库">↻</button></span></div>
+          <div class="panel-title panel-title-rich"><span><b>素材库</b><small>PROJECT ASSETS</small></span><span class="panel-tools"><button title="筛选">≡</button><button id="refreshLibraryBtn" title="刷新素材库">↻</button><button type="button" data-view-jump="global-library" title="打开全局库维护">◆</button></span></div>
           <div class="library-main">
             <div class="library-sidebar">
               <button id="importToggle" class="library-ai-button" type="button"><span>✦</span> AI 拆图</button>
@@ -121,7 +164,7 @@
         </section>
 
         <aside class="card panel inspector-panel">
-          <div class="panel-title panel-title-rich"><span><b>素材检查器</b><small>ASSET INSPECTOR</small></span><span class="panel-tools"><button title="固定面板">⌖</button></span></div>
+          <div class="panel-title panel-title-rich"><span><b>素材检查器</b><small>ASSET INSPECTOR</small></span><span class="panel-tools"><button title="固定面板">⌖</button><button type="button" data-view-jump="workflow" title="进入处理工具">→</button></span></div>
           <div id="assetPreview" class="asset-preview empty"><div class="empty-state"><span class="empty-icon">◎</span><strong>尚未选择素材</strong><small>选择素材后可编辑名称、分类、Mask 和导出设置。</small></div></div>
         </aside>
       </section>
