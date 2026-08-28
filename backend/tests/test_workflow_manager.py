@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.completion_models import AssetCompletionRequest
 from app.models import BBox
+from app.services.asset_library import AssetLibrary
 from app.services.completion_service import CompletionService
 from app.services.pipeline import AssetSplitPipeline
 from app.services.scene_store import SceneStore
@@ -11,8 +12,9 @@ from app.workflow_models import RunProjectRequest, WorkflowStage
 
 def test_mock_project_workflow_runs_semantics_generation_and_split(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("GAME_CREATER_MODE", "mock")
-    pipeline = AssetSplitPipeline(tmp_path / "workspace")
-    manager = WorkflowManager(tmp_path / "workspace", pipeline)
+    workspace = tmp_path / "workspace"
+    pipeline = AssetSplitPipeline(workspace)
+    manager = WorkflowManager(workspace, pipeline)
 
     project = manager.run(
         RunProjectRequest(
@@ -39,10 +41,15 @@ def test_mock_project_workflow_runs_semantics_generation_and_split(tmp_path, mon
     assert (project_dir / "generation" / "metadata.json").is_file()
     assert (project_dir / "generation" / "source.png").is_file()
 
-    scene_dir = tmp_path / "workspace" / project.scene_id
+    scene_dir = workspace / project.scene_id
     assert (scene_dir / "scene.json").is_file()
     assert any(event.stage == WorkflowStage.GENERATING for event in project.events)
     assert any(event.stage == WorkflowStage.ASSET_REVIEW for event in project.events)
+
+    scene = SceneStore(workspace).load(project.scene_id)
+    assert all(asset.library_asset_id for asset in scene.assets)
+    first_library_asset = AssetLibrary(workspace).get(scene.assets[0].library_asset_id)
+    assert first_library_asset.project_id == project.project_id
 
 
 def test_project_workflow_can_stop_after_generation(tmp_path, monkeypatch) -> None:
@@ -64,7 +71,7 @@ def test_project_workflow_can_stop_after_generation(tmp_path, monkeypatch) -> No
     assert project.generation is not None
 
 
-def test_completion_result_is_recorded_back_into_project_history(tmp_path, monkeypatch) -> None:
+def test_completion_result_is_recorded_back_into_project_history_and_library_version(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("GAME_CREATER_MODE", "mock")
     workspace = tmp_path / "workspace"
     pipeline = AssetSplitPipeline(workspace)
@@ -83,6 +90,7 @@ def test_completion_result_is_recorded_back_into_project_history(tmp_path, monke
 
     scene_manifest = SceneStore(workspace).load(project.scene_id)
     asset = scene_manifest.assets[0]
+    assert asset.library_asset_id
     rect = BBox(
         x1=asset.bbox.x1,
         y1=asset.bbox.y1,
@@ -114,3 +122,8 @@ def test_completion_result_is_recorded_back_into_project_history(tmp_path, monke
     assert job.output_asset == result.completed_asset
     assert any(event.stage == WorkflowStage.COMPLETING for event in updated.events)
     assert updated.events[-1].stage == WorkflowStage.ASSET_REVIEW
+
+    versions = AssetLibrary(workspace).list_versions(asset.library_asset_id)
+    assert [item.kind for item in versions] == ["ai_completed", "segmented"]
+    # AI completion is held for review and does not silently replace active source pixels.
+    assert AssetLibrary(workspace).get(asset.library_asset_id).active_version == 1
