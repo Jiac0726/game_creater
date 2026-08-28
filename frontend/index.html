@@ -150,9 +150,9 @@
           <div class="panel-title canvas-titlebar">
             <div class="file-tab"><span class="file-dot"></span><b>场景画布</b><small>森林村落 / source</small></div>
             <div class="canvas-tools" aria-label="画布工具"><button class="active" type="button" title="平移">✋</button><button type="button" title="选择">↖</button><button type="button" title="移动">✥</button><span></span><button type="button" title="适应画布">▣</button><button type="button" title="收藏">☆</button></div>
-            <div class="zoom-control"><button type="button">−</button><span>100%</span><button type="button">＋</button></div>
+            <div class="zoom-control" aria-label="画布缩放"><button id="zoomOutBtn" type="button" title="缩小" aria-label="缩小">−</button><button id="zoomResetBtn" class="zoom-value" type="button" title="重置缩放"><span id="zoomValue">100%</span></button><button id="zoomInBtn" type="button" title="放大" aria-label="放大">＋</button></div>
           </div>
-          <div class="viewer">
+          <div id="canvasViewer" class="viewer">
             <div id="viewerStage" class="viewer-stage"><img id="scenePreview" alt="场景预览" /><canvas id="selectionCanvas" aria-label="矩形拆分选择层"></canvas></div>
             <div id="viewerHint" class="viewer-empty"><div class="viewer-orbit"><span>✦</span></div><strong>将场景拖入工作台</strong><p>从一张场景图开始，自动生成透明素材、Mask 与引擎导出包。</p><label class="viewer-upload" for="imageInput">选择场景图片</label></div>
           </div>

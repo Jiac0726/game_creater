@@ -5,8 +5,13 @@ const promptInput = $("promptInput");
 const analyzeBtn = $("analyzeBtn");
 const scenePreview = $("scenePreview");
 const viewerStage = $("viewerStage");
+const canvasViewer = $("canvasViewer");
 const selectionCanvas = $("selectionCanvas");
 const selectionCtx = selectionCanvas.getContext("2d");
+const zoomOutBtn = $("zoomOutBtn");
+const zoomResetBtn = $("zoomResetBtn");
+const zoomInBtn = $("zoomInBtn");
+const zoomValue = $("zoomValue");
 const assetList = $("assetList");
 const assetPreview = $("assetPreview");
 const message = $("message");
@@ -78,6 +83,25 @@ let assetSearchQuery = "";
 let categoryFilter = "all";
 let tabFilter = "all";
 let libraryData = { scenes: [], asset_count: 0, category_counts: {} };
+let canvasZoom = 1;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_STEP = 0.25;
+
+function setCanvasZoom(value) {
+  canvasZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value * 100) / 100));
+  if (viewerStage) viewerStage.style.setProperty("--canvas-zoom", String(canvasZoom));
+  if (zoomValue) zoomValue.textContent = `${Math.round(canvasZoom * 100)}%`;
+  if (zoomOutBtn) zoomOutBtn.disabled = canvasZoom <= ZOOM_MIN;
+  if (zoomInBtn) zoomInBtn.disabled = canvasZoom >= ZOOM_MAX;
+  if (zoomResetBtn) zoomResetBtn.classList.toggle("active", canvasZoom !== 1);
+}
+
+function adjustCanvasZoom(delta) {
+  setCanvasZoom(canvasZoom + delta);
+}
+
+setCanvasZoom(1);
 
 function setPipelineProgress(percent, state) {
   const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
@@ -292,6 +316,10 @@ listViewBtn?.addEventListener("click", () => setLibraryView("list"));
 thumbnailSize?.addEventListener("input", () => {
   assetList.style.setProperty("--asset-thumb-width", `${thumbnailSize.value}px`);
 });
+zoomOutBtn?.addEventListener("click", () => adjustCanvasZoom(-ZOOM_STEP));
+zoomInBtn?.addEventListener("click", () => adjustCanvasZoom(ZOOM_STEP));
+zoomResetBtn?.addEventListener("click", () => setCanvasZoom(1));
+document.querySelector('.canvas-tools button[title="适应画布"]')?.addEventListener("click", () => setCanvasZoom(1));
 refreshLibraryBtn?.addEventListener("click", () => loadLibraryIndex(false));
 collapseScenesBtn?.addEventListener("click", () => {
   sceneList?.classList.toggle("collapsed");
@@ -437,6 +465,7 @@ imageInput.addEventListener("change", () => {
 
   currentManifest = null;
   currentSplitRect = null;
+  setCanvasZoom(1);
   selectedAssetIds.clear();
   updateSelectionBar();
   clearSelectionCanvas();
@@ -463,6 +492,11 @@ scenePreview.addEventListener("load", () => {
   syncSelectionCanvas();
   drawCurrentSelection();
 });
+canvasViewer?.addEventListener("wheel", (event) => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  event.preventDefault();
+  adjustCanvasZoom(event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP);
+}, { passive: false });
 window.addEventListener("resize", () => {
   syncSelectionCanvas();
   drawCurrentSelection();
@@ -839,6 +873,7 @@ async function splitAsset(manifest, asset) {
 
 function applyManifest(manifest, selectedAssetId = null) {
   currentManifest = manifest;
+  setCanvasZoom(1);
   const validIds = new Set(manifest.assets.map((asset) => asset.id));
   [...selectedAssetIds].forEach((id) => {
     if (!validIds.has(id)) selectedAssetIds.delete(id);
