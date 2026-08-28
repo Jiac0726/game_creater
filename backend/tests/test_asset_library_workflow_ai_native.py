@@ -28,6 +28,7 @@ def test_full_asset_library_workflow_is_ai_discoverable() -> None:
         "post.library.animations",
         "get.library.animations.clip_id",
         "patch.library.animations.clip_id",
+        "put.library.animations.clip_id.frames",
         "get.library.tilesets",
         "post.library.tilesets",
         "get.library.tilesets.tileset_id",
@@ -56,6 +57,7 @@ def test_asset_workflow_tool_schemas_include_game_ready_2d_bodies() -> None:
     runtime_body = tools["patch.library.assets.asset_id.runtime.config"]["parameters"]["properties"]["body"]
     polygon_body = tools["post.library.assets.asset_id.collision.polygon.generate"]["parameters"]["properties"]["body"]
     animation_body = tools["post.library.animations"]["parameters"]["properties"]["body"]
+    frames_body = tools["put.library.animations.clip_id.frames"]["parameters"]["properties"]["body"]
     tileset_body = tools["post.library.tilesets"]["parameters"]["properties"]["body"]
     game_ready_body = tools["post.library.packs.export.game.ready"]["parameters"]["properties"]["body"]
     preflight_body = tools["post.library.packs.preflight"]["parameters"]["properties"]["body"]
@@ -69,8 +71,12 @@ def test_asset_workflow_tool_schemas_include_game_ready_2d_bodies() -> None:
     assert "max_points" in polygon_body["properties"]
     assert "frame_asset_ids" in animation_body["properties"]
     assert "fps" in animation_body["properties"]
+    assert "frame_asset_ids" in frames_body["properties"]
+    assert "require_same_frames" in frames_body["properties"]
     assert "tile_asset_ids" in tileset_body["properties"]
     assert "tile_width" in tileset_body["properties"]
+    assert "autotile_mode" in tileset_body["properties"]
+    assert "terrain_rules" in tileset_body["properties"]
     assert "animation_ids" in game_ready_body["properties"]
     assert "tileset_ids" in game_ready_body["properties"]
     assert "asset_ids" in preflight_body["properties"]
