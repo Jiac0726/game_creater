@@ -117,7 +117,7 @@ Modes:
 ```text
 none
 cardinal4
- eight8
+eight8
 ```
 
 Neighbor bits are stable and engine-independent:
