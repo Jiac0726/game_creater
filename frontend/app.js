@@ -18,6 +18,14 @@ const archiveLink = $("archiveLink");
 const selectionBar = $("selectionBar");
 const selectionCount = $("selectionCount");
 const mergeSelectedBtn = $("mergeSelectedBtn");
+const globalSearch = $("globalSearch");
+const assetCount = $("assetCount");
+const queueCount = $("queueCount");
+const taskName = $("taskName");
+const taskDetail = $("taskDetail");
+const pipelinePercent = $("pipelinePercent");
+const pipelineBar = $("pipelineBar");
+const pipelineState = $("pipelineState");
 
 const ASSET_CATEGORIES = [
   "uncategorized",
@@ -37,6 +45,96 @@ let localPreviewUrl = null;
 let currentSplitRect = null;
 let dragStart = null;
 const selectedAssetIds = new Set();
+let pipelineTimer = null;
+
+function setPipelineProgress(percent, state) {
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+  if (pipelinePercent) pipelinePercent.textContent = `${safePercent}%`;
+  if (pipelineBar) pipelineBar.style.width = `${safePercent}%`;
+  if (pipelineState) pipelineState.textContent = state;
+}
+
+function resetPipelineStages() {
+  document.querySelectorAll("[data-pipeline-stage]").forEach((stage) => {
+    stage.classList.remove("running", "done", "failed");
+  });
+}
+
+function startPipeline(file, prompts) {
+  window.clearInterval(pipelineTimer);
+  resetPipelineStages();
+  if (queueCount) queueCount.textContent = "1";
+  if (taskName) taskName.textContent = file?.name || "场景拆解任务";
+  if (taskDetail) taskDetail.textContent = prompts || "自动识别游戏素材";
+
+  const stageNames = ["detection", "segmentation", "refine"];
+  let stageIndex = 0;
+  let progress = 12;
+  document.querySelector(`[data-pipeline-stage="${stageNames[0]}"]`)?.classList.add("running");
+  setPipelineProgress(progress, "PROCESSING");
+
+  pipelineTimer = window.setInterval(() => {
+    const current = document.querySelector(`[data-pipeline-stage="${stageNames[stageIndex]}"]`);
+    current?.classList.remove("running");
+    current?.classList.add("done");
+    stageIndex = Math.min(stageIndex + 1, stageNames.length - 1);
+    document.querySelector(`[data-pipeline-stage="${stageNames[stageIndex]}"]`)?.classList.add("running");
+    progress = Math.min(84, progress + 24);
+    setPipelineProgress(progress, "PROCESSING");
+    if (progress >= 84) window.clearInterval(pipelineTimer);
+  }, 900);
+}
+
+function finishPipeline(assetTotal) {
+  window.clearInterval(pipelineTimer);
+  resetPipelineStages();
+  document.querySelectorAll("[data-pipeline-stage]").forEach((stage) => stage.classList.add("done"));
+  if (taskDetail) taskDetail.textContent = `完成 ${assetTotal} 个素材 · 可导出至 Godot / Unity`;
+  setPipelineProgress(100, "COMPLETE");
+}
+
+function failPipeline(detail) {
+  window.clearInterval(pipelineTimer);
+  const running = document.querySelector("[data-pipeline-stage].running") || document.querySelector("[data-pipeline-stage]");
+  running?.classList.remove("running");
+  running?.classList.add("failed");
+  if (taskDetail) taskDetail.textContent = detail || "任务处理失败";
+  setPipelineProgress(Number.parseInt(pipelinePercent?.textContent || "0", 10), "FAILED");
+}
+
+function filterAssetRows() {
+  const query = (globalSearch?.value || "").trim().toLocaleLowerCase();
+  document.querySelectorAll(".asset-row-shell").forEach((row) => {
+    row.hidden = Boolean(query) && !row.textContent.toLocaleLowerCase().includes(query);
+  });
+}
+
+globalSearch?.addEventListener("input", filterAssetRows);
+window.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") {
+    event.preventDefault();
+    globalSearch?.focus();
+    globalSearch?.select();
+  }
+});
+
+document.querySelectorAll(".rail-item[data-target]").forEach((item) => {
+  item.addEventListener("click", () => {
+    const target = $(item.dataset.target);
+    if (!target) return;
+    if (target.tagName === "DETAILS") target.open = true;
+    document.querySelectorAll(".rail-item").forEach((candidate) => candidate.classList.remove("active"));
+    item.classList.add("active");
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+
+document.querySelectorAll(".library-tabs button").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".library-tabs button").forEach((candidate) => candidate.classList.remove("active"));
+    button.classList.add("active");
+  });
+});
 
 async function loadHealth() {
   health.classList.remove("ok", "bad");
@@ -82,6 +180,8 @@ imageInput.addEventListener("change", () => {
   manifestLink.classList.add("hidden");
   archiveLink.classList.add("hidden");
   fileName.textContent = file.name;
+  if (taskName) taskName.textContent = file.name;
+  if (taskDetail) taskDetail.textContent = "已载入场景，等待启动 AI 拆图";
 
   if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
   localPreviewUrl = URL.createObjectURL(file);
@@ -156,6 +256,7 @@ analyzeBtn.addEventListener("click", async () => {
   analyzeBtn.disabled = true;
   analyzeBtn.textContent = "拆解中…";
   message.textContent = "正在生成检测结果、Mask、透明 PNG、Overlay 和 scene.json…";
+  startPipeline(file, promptInput.value);
 
   try {
     const response = await fetch("/api/v1/scenes/analyze", { method: "POST", body: form });
@@ -166,8 +267,10 @@ analyzeBtn.addEventListener("click", async () => {
     currentSplitRect = null;
     applyManifest(data);
     message.textContent = `完成：${data.assets.length} 个素材 · 已生成 Overlay · 模式 ${data.mode}`;
+    finishPipeline(data.assets.length);
   } catch (error) {
     message.textContent = `失败：${error.message}`;
+    failPipeline(error.message);
   } finally {
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = "AI 拆解";
@@ -216,6 +319,7 @@ function renderAssets(manifest, selectedAssetId = null) {
   assetList.classList.remove("empty");
   assetPreview.classList.remove("empty");
   updateSelectionBar();
+  if (assetCount) assetCount.textContent = `${manifest.assets.length} 项`;
 
   if (!manifest.assets.length) {
     assetList.classList.add("empty");
@@ -263,6 +367,7 @@ function renderAssets(manifest, selectedAssetId = null) {
       showAsset(manifest, asset);
     }
   });
+  filterAssetRows();
 }
 
 function showAsset(manifest, asset) {

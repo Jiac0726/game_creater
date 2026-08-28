@@ -3,167 +3,127 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Game Creater v0.6 dev</title>
+  <meta name="theme-color" content="#0d1115" />
+  <title>Game Creater · 游戏素材终端</title>
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/semantic.css" />
   <link rel="stylesheet" href="/point_prompt.css" />
   <link rel="stylesheet" href="/edge_refine.css" />
+  <link rel="stylesheet" href="/studio.css" />
 </head>
 <body>
-  <main class="shell">
-    <header>
-      <div>
-        <p class="eyebrow">GAME ASSET FACTORY</p>
-        <h1>游戏素材 AI 生产工具 <span>v0.6 dev</span></h1>
+  <div class="app-root">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Game Creater 首页">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>GAME CREATER</span>
+      </a>
+      <button class="project-switcher" type="button" aria-label="当前项目">
+        <span class="project-dot"></span>
+        <span><small>当前项目</small><strong>森林村落</strong></span>
+        <b>⌄</b>
+      </button>
+      <label class="global-search" aria-label="搜索素材">
+        <span aria-hidden="true">⌕</span>
+        <input id="globalSearch" type="search" placeholder="搜索素材、标签或分类" autocomplete="off" />
+        <kbd>Ctrl K</kbd>
+      </label>
+      <div class="topbar-actions">
+        <div class="runtime-state"><span class="runtime-light"></span><span><strong>ENGINE READY</strong><small>本地素材管线</small></span></div>
+        <div id="health" class="status">连接中…</div>
+        <button class="icon-button" type="button" title="帮助">?</button>
+        <button class="icon-button" type="button" title="设置">⚙</button>
+        <a class="export-primary" href="#exportDock">导出 <span>⌄</span></a>
       </div>
-      <div id="health" class="status">连接中…</div>
     </header>
 
-    <section class="card semantic-panel">
-      <div class="semantic-head">
-        <div>
-          <h2>游戏素材语义联想</h2>
-          <p>中文概念 → 本地素材本体 → 关键词组 → GroundingDINO 英文 Prompt</p>
-        </div>
-        <span class="semantic-badge">OFFLINE · NO API</span>
-      </div>
+    <nav class="rail" aria-label="主导航">
+      <button class="rail-item active" type="button" data-target="assetWorkspace"><span class="rail-icon">▰</span><span>素材库</span></button>
+      <button class="rail-item" type="button" data-target="viewerPanel"><span class="rail-icon">◫</span><span>场景</span></button>
+      <button class="rail-item" type="button" data-target="semanticPanel"><span class="rail-icon">✦</span><span>语义</span></button>
+      <button class="rail-item" type="button" data-target="taskDock"><span class="rail-icon">⇆</span><span>工作流</span></button>
+      <button class="rail-item" type="button" data-target="exportDock"><span class="rail-icon">⇩</span><span>导出</span></button>
+      <div class="rail-spacer"></div>
+      <div class="rail-version">v0.6</div>
+    </nav>
 
-      <div class="semantic-controls">
-        <label>
-          <span>场景 / 概念关键词</span>
-          <input id="semanticInput" value="废弃地铁站" placeholder="例如：魔法森林、赛博朋克小巷、海边渔村" />
-        </label>
-        <label>
-          <span>展开深度</span>
-          <select id="semanticDepth">
-            <option value="1">1 · 基础</option>
-            <option value="2" selected>2 · 状态组合</option>
-            <option value="3">3 · 深度</option>
-          </select>
-        </label>
-        <label>
-          <span>每组上限</span>
-          <select id="semanticMaxPerGroup">
-            <option value="8">8</option>
-            <option value="12" selected>12</option>
-            <option value="20">20</option>
-            <option value="30">30</option>
-          </select>
-        </label>
-        <div class="semantic-actions">
-          <button id="semanticExpandBtn">生成关键词组</button>
-          <button id="semanticApplyBtn" disabled>应用到拆图</button>
-          <button id="semanticAnalyzeBtn" disabled>联想并拆图</button>
-          <button id="semanticRecommendBtn" disabled>检查缺失素材</button>
-        </div>
-      </div>
+    <main class="studio-shell">
+      <section class="command-bar card" aria-label="素材拆解控制台">
+        <div class="command-title"><span class="command-kicker">ASSET PIPELINE</span><strong>素材拆解控制台</strong></div>
+        <label class="upload command-field"><span>场景图片</span><input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" /><b id="fileName">选择 PNG / JPG / WEBP</b></label>
+        <label class="command-field prompt-field"><span>目标关键词 · GroundingDINO Prompt</span><input id="promptInput" value="tree, rock, house, crate, grass" /></label>
+        <button id="analyzeBtn" class="analyze-button" type="button"><span>✦</span> AI 拆图</button>
+      </section>
 
-      <div id="semanticExamples" class="semantic-examples"></div>
-
-      <div id="semanticResult" class="semantic-result hidden">
-        <div id="semanticSummary" class="semantic-summary"></div>
-        <div id="semanticGroups" class="semantic-groups"></div>
-        <div id="semanticRecommendations" class="semantic-recommendations hidden"></div>
-      </div>
-    </section>
-
-    <section class="toolbar card">
-      <label class="upload">
-        <strong>场景图片</strong>
-        <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp" />
-        <span id="fileName">选择 PNG / JPG / WEBP</span>
-      </label>
-      <label>
-        <strong>目标关键词 / GroundingDINO Prompt</strong>
-        <input id="promptInput" value="tree, rock, house, crate, grass" />
-      </label>
-      <button id="analyzeBtn">AI 拆解</button>
-    </section>
-
-    <section class="workspace">
-      <aside class="card panel">
-        <div class="panel-title">Asset Tree</div>
-        <div id="selectionBar" class="selection-bar hidden">
-          <span id="selectionCount">已选 0</span>
-          <button id="mergeSelectedBtn" disabled>合并选中</button>
-        </div>
-        <div id="assetList" class="asset-list empty">尚未分析场景</div>
-      </aside>
-
-      <section class="card panel viewer-panel">
-        <div class="panel-title">Scene Viewer · 拖拽矩形可辅助拆分</div>
-        <div class="viewer">
-          <div id="viewerStage" class="viewer-stage">
-            <img id="scenePreview" alt="场景预览" />
-            <canvas id="selectionCanvas" aria-label="矩形拆分选择层"></canvas>
+      <details id="semanticPanel" class="semantic-drawer card">
+        <summary><span class="drawer-icon">⌘</span><span><strong>游戏素材语义联想</strong><small>中文概念 → 本地素材本体 → GroundingDINO 英文 Prompt</small></span><span class="semantic-badge">OFFLINE · NO API</span><span class="drawer-chevron">⌄</span></summary>
+        <div class="semantic-panel">
+          <div class="semantic-controls">
+            <label><span>场景 / 概念关键词</span><input id="semanticInput" value="废弃地铁站" placeholder="例如：魔法森林、赛博朋克小巷、海边渔村" /></label>
+            <label><span>展开深度</span><select id="semanticDepth"><option value="1">1 · 基础</option><option value="2" selected>2 · 状态组合</option><option value="3">3 · 深度</option></select></label>
+            <label><span>每组上限</span><select id="semanticMaxPerGroup"><option value="8">8</option><option value="12" selected>12</option><option value="20">20</option><option value="30">30</option></select></label>
+            <div class="semantic-actions"><button id="semanticExpandBtn">生成关键词组</button><button id="semanticApplyBtn" disabled>应用到拆图</button><button id="semanticAnalyzeBtn" disabled>联想并拆图</button><button id="semanticRecommendBtn" disabled>检查缺失素材</button></div>
           </div>
-          <div id="viewerHint">上传图片后在这里预览</div>
+          <div id="semanticExamples" class="semantic-examples"></div>
+          <div id="semanticResult" class="semantic-result hidden"><div id="semanticSummary" class="semantic-summary"></div><div id="semanticGroups" class="semantic-groups"></div><div id="semanticRecommendations" class="semantic-recommendations hidden"></div></div>
+        </div>
+      </details>
+
+      <section id="assetWorkspace" class="workspace">
+        <aside class="card panel library-panel">
+          <div class="panel-title panel-title-rich"><span><b>素材库</b><small>PROJECT ASSETS</small></span><span class="panel-tools"><button title="筛选">≡</button><button title="刷新">↻</button></span></div>
+          <div class="library-tabs" role="tablist" aria-label="素材筛选"><button class="active" type="button">全部</button><button type="button">精灵</button><button type="button">背景</button><button type="button">UI</button></div>
+          <div class="library-folder-head"><span>当前场景</span><b id="assetCount">0 项</b></div>
+          <div id="selectionBar" class="selection-bar hidden"><span id="selectionCount">已选 0</span><button id="mergeSelectedBtn" disabled>合并选中</button></div>
+          <div id="assetList" class="asset-list empty"><div class="empty-state compact"><span class="empty-icon">▦</span><strong>素材库等待内容</strong><small>上传场景并运行 AI 拆图后，素材会出现在这里。</small></div></div>
+          <div class="library-foot"><span>支持 PNG · JPG · WEBP</span><span>本地优先</span></div>
+        </aside>
+
+        <section id="viewerPanel" class="card panel viewer-panel">
+          <div class="panel-title canvas-titlebar">
+            <div class="file-tab"><span class="file-dot"></span><b>场景画布</b><small>森林村落 / source</small></div>
+            <div class="canvas-tools" aria-label="画布工具"><button class="active" type="button" title="平移">✋</button><button type="button" title="选择">↖</button><button type="button" title="移动">✥</button><span></span><button type="button" title="适应画布">▣</button><button type="button" title="收藏">☆</button></div>
+            <div class="zoom-control"><button type="button">−</button><span>100%</span><button type="button">＋</button></div>
+          </div>
+          <div class="viewer">
+            <div id="viewerStage" class="viewer-stage"><img id="scenePreview" alt="场景预览" /><canvas id="selectionCanvas" aria-label="矩形拆分选择层"></canvas></div>
+            <div id="viewerHint" class="viewer-empty"><div class="viewer-orbit"><span>✦</span></div><strong>将场景拖入工作台</strong><p>从一张场景图开始，自动生成透明素材、Mask 与引擎导出包。</p><label class="viewer-upload" for="imageInput">选择场景图片</label></div>
+          </div>
+          <div class="canvas-statusbar"><span><i class="cyan-dot"></i> RGBA · 32 bit</span><span>拖拽矩形可辅助拆分</span><span>⌗ 适应窗口</span></div>
+        </section>
+
+        <aside class="card panel inspector-panel">
+          <div class="panel-title panel-title-rich"><span><b>素材检查器</b><small>ASSET INSPECTOR</small></span><span class="panel-tools"><button title="固定面板">⌖</button></span></div>
+          <div id="assetPreview" class="asset-preview empty"><div class="empty-state"><span class="empty-icon">◎</span><strong>尚未选择素材</strong><small>选择素材后可编辑名称、分类、Mask 和导出设置。</small></div></div>
+        </aside>
+      </section>
+
+      <section id="taskDock" class="card task-dock">
+        <div class="task-head"><span><strong>任务队列</strong><b id="queueCount">0</b></span><div><button type="button">全部暂停</button><button type="button">清空队列</button></div></div>
+        <div class="pipeline-row">
+          <div class="pipeline-meta"><span class="task-thumb">✦</span><span><strong id="taskName">等待场景任务</strong><small id="taskDetail">上传图片后创建本地处理任务</small></span></div>
+          <div class="pipeline-stages">
+            <div class="pipeline-stage" data-pipeline-stage="detection"><span class="stage-node">1</span><b>检测</b><small>Detection</small></div><i></i>
+            <div class="pipeline-stage" data-pipeline-stage="segmentation"><span class="stage-node">2</span><b>分割</b><small>Segmentation</small></div><i></i>
+            <div class="pipeline-stage" data-pipeline-stage="refine"><span class="stage-node">3</span><b>精修</b><small>Refine</small></div><i></i>
+            <div class="pipeline-stage" data-pipeline-stage="export"><span class="stage-node">4</span><b>导出</b><small>Export</small></div>
+          </div>
+          <div class="pipeline-progress"><span id="pipelinePercent">0%</span><div><i id="pipelineBar"></i></div><small id="pipelineState">IDLE</small></div>
         </div>
       </section>
 
-      <aside class="card panel">
-        <div class="panel-title">Asset Preview / Editor</div>
-        <div id="assetPreview" class="asset-preview empty">点击左侧素材查看</div>
-      </aside>
-    </section>
+      <section class="tool-drawer-grid">
+        <details class="card tool-drawer"><summary><span><b>SAM2 点选修正</b><small>正点包含目标，负点排除背景</small></span><span id="samPointStatus" class="sam-point-status">未启用</span><i>⌄</i></summary><div class="sam-panel"><div class="sam-controls"><label><span>素材名称</span><input id="samLabelInput" placeholder="新建素材名称；精修时自动带入当前素材" /></label><div class="sam-actions"><button id="samNewBtn">新建素材</button><button id="samRefineBtn">精修当前素材</button></div><div class="sam-polarity"><button id="samPositiveBtn" disabled>正点 +</button><button id="samNegativeBtn" disabled>负点 −</button></div><div class="sam-actions"><button id="samClearBtn" disabled>清空点</button><button id="samRunBtn" disabled>生成 / 更新 Mask</button><button id="samCancelBtn" disabled>退出点选</button></div></div></div></details>
+        <details class="card tool-drawer"><summary><span><b>BiRefNet 边缘优化</b><small>优化透明边缘，不改变二值 Mask</small></span><span id="edgeRefineStatus" class="edge-status">检查中…</span><i>⌄</i></summary><div class="edge-panel"><div class="edge-controls"><label><span>边界半径(px)</span><input id="edgeRadius" type="number" min="1" max="24" value="6" /></label><button id="edgeRefineBtn" disabled>BiRefNet 精修当前素材</button><div class="edge-note">BiRefNet 仅参与 SAM 边界带的软 Alpha，硬 Mask 仍用于合并、拆分和游戏配置。</div></div></div></details>
+      </section>
 
-    <section class="card sam-panel">
-      <div class="sam-head">
-        <div>
-          <h2>SAM2 点击添加 / 修正 Mask</h2>
-          <p>先完成一次场景拆解。绿色正点表示“包含”，红色负点表示“排除”；右键可直接添加负点。</p>
-        </div>
-        <span id="samPointStatus" class="sam-point-status">未启用</span>
-      </div>
-      <div class="sam-controls">
-        <label>
-          <span>素材名称</span>
-          <input id="samLabelInput" placeholder="新建素材名称；精修时自动带入当前素材" />
-        </label>
-        <div class="sam-actions">
-          <button id="samNewBtn">新建素材</button>
-          <button id="samRefineBtn">精修当前素材</button>
-        </div>
-        <div class="sam-polarity">
-          <button id="samPositiveBtn" disabled>正点 +</button>
-          <button id="samNegativeBtn" disabled>负点 −</button>
-        </div>
-        <div class="sam-actions">
-          <button id="samClearBtn" disabled>清空点</button>
-          <button id="samRunBtn" disabled>生成 / 更新 Mask</button>
-          <button id="samCancelBtn" disabled>退出点选</button>
-        </div>
-      </div>
-    </section>
+      <section id="exportDock" class="card footerbar">
+        <div class="message-area"><span class="message-light"></span><span id="message">先输入中文概念生成素材关键词，也可以直接上传图片并手动输入检测 Prompt。</span></div>
+        <div class="footer-actions"><a id="manifestLink" class="hidden" target="_blank">scene.json</a><a id="archiveLink" class="hidden">素材 ZIP</a><a id="godotLink" class="hidden">Godot 4</a><a id="unityLink" class="hidden">Unity 2D</a></div>
+      </section>
+    </main>
+  </div>
 
-    <section class="card edge-panel">
-      <div class="edge-head">
-        <div>
-          <h2>BiRefNet 边缘 Alpha 精修</h2>
-          <p>可选 sidecar。只优化当前素材的透明边缘，不改变 SAM 二值 Mask 和 bbox。</p>
-        </div>
-        <span id="edgeRefineStatus" class="edge-status">检查中…</span>
-      </div>
-      <div class="edge-controls">
-        <label>
-          <span>边界半径(px)</span>
-          <input id="edgeRadius" type="number" min="1" max="24" value="6" />
-        </label>
-        <button id="edgeRefineBtn" disabled>BiRefNet 精修当前素材</button>
-        <div class="edge-note">先在 Asset Tree 选择素材。BiRefNet 只参与 SAM 边界带的软 Alpha，硬 Mask 仍作为合并、拆分和后续游戏配置依据。</div>
-      </div>
-    </section>
-
-    <section class="card footerbar">
-      <span id="message">先输入中文概念生成素材关键词，也可以直接上传图片并手动输入检测 Prompt。</span>
-      <div class="footer-actions">
-        <a id="manifestLink" class="hidden" target="_blank">打开 scene.json</a>
-        <a id="archiveLink" class="hidden">下载素材 ZIP</a>
-        <a id="godotLink" class="hidden">下载 Godot 4 项目</a>
-        <a id="unityLink" class="hidden">下载 Unity 2D 导入包</a>
-      </div>
-    </section>
-  </main>
   <script src="/app.js"></script>
   <script src="/semantic.js"></script>
   <script src="/point_prompt.js"></script>
