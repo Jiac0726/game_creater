@@ -57,7 +57,7 @@ class Asset2DGameReadyPackService:
                 )
 
         game_ready = {
-            "schema": "game-creater/game-ready-2d/v1",
+            "schema": "game-creater/game-ready-2d/v2",
             "pack_id": base.pack_id,
             "collision_polygons": polygons,
             "animations": [item.model_dump(mode="json") for item in animations],
@@ -88,7 +88,7 @@ class Asset2DGameReadyPackService:
         self._write_godot_animations(root, animations)
         self._write_godot_tilesets(root, tilesets)
         (root / "GAME_READY_2D.md").write_text(
-            "Game-ready resources include CollisionPolygon2D prefab data, AnimatedSprite2D scenes, and TileSet builder scripts. Run each tileset builder in the Godot editor once to create its native .tres TileSet resource.\n",
+            "Game-ready resources include CollisionPolygon2D prefab data, AnimatedSprite2D scenes, and TileSet builder scripts with optional Godot 4 terrain metadata. Run each tileset builder in the Godot editor once to create its native .tres TileSet resource.\n",
             encoding="utf-8",
         )
 
@@ -157,24 +157,79 @@ class Asset2DGameReadyPackService:
         tileset_dir = root / "tilesets"
         tileset_dir.mkdir(parents=True, exist_ok=True)
         for tileset in tilesets:
-            paths = ", ".join(f'"res://godot4/assets/{asset_id}.png"' for asset_id in tileset.tile_asset_ids)
+            entries = [
+                {"asset_id": asset_id, "path": f"res://godot4/assets/{asset_id}.png"}
+                for asset_id in tileset.tile_asset_ids
+            ]
+            rules = [rule.model_dump(mode="json") for rule in tileset.terrain_rules]
+            terrain_names = list(dict.fromkeys(rule["terrain"] for rule in rules))
+            mode_constant = (
+                "TileSet.TERRAIN_MODE_MATCH_SIDES"
+                if tileset.autotile_mode.value == "cardinal4"
+                else "TileSet.TERRAIN_MODE_MATCH_CORNERS_AND_SIDES"
+            )
             script = f'''@tool
 extends EditorScript
+
+const N = 1
+const NE = 2
+const E = 4
+const SE = 8
+const S = 16
+const SW = 32
+const W = 64
+const NW = 128
+
+func _apply_peering_bits(data: TileData, mask: int, terrain_id: int):
+    if mask & N: data.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_TOP_SIDE, terrain_id)
+    if mask & NE: data.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_TOP_RIGHT_CORNER, terrain_id)
+    if mask & E: data.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_RIGHT_SIDE, terrain_id)
+    if mask & SE: data.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_BOTTOM_RIGHT_CORNER, terrain_id)
+    if mask & S: data.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_BOTTOM_SIDE, terrain_id)
+    if mask & SW: data.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_BOTTOM_LEFT_CORNER, terrain_id)
+    if mask & W: data.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_LEFT_SIDE, terrain_id)
+    if mask & NW: data.set_terrain_peering_bit(TileSet.CELL_NEIGHBOR_TOP_LEFT_CORNER, terrain_id)
 
 func _run():
     var tile_set = TileSet.new()
     tile_set.tile_size = Vector2i({tileset.tile_width}, {tileset.tile_height})
-    var texture_paths = [{paths}]
-    for texture_path in texture_paths:
-        var texture = load(texture_path)
+    var tile_entries = {json.dumps(entries, ensure_ascii=False)}
+    var terrain_rules = {json.dumps(rules, ensure_ascii=False)}
+    var terrain_names = {json.dumps(terrain_names, ensure_ascii=False)}
+    var source_by_asset = {{}}
+
+    if terrain_rules.size() > 0:
+        tile_set.add_terrain_set()
+        tile_set.set_terrain_set_mode(0, {mode_constant})
+        for terrain_name in terrain_names:
+            var terrain_id = tile_set.get_terrains_count(0)
+            tile_set.add_terrain(0)
+            tile_set.set_terrain_name(0, terrain_id, terrain_name)
+
+    for entry in tile_entries:
+        var texture = load(entry["path"])
         if texture == null:
-            push_warning("Missing tile texture: " + texture_path)
+            push_warning("Missing tile texture: " + entry["path"])
             continue
         var source = TileSetAtlasSource.new()
         source.texture = texture
         source.texture_region_size = Vector2i({tileset.tile_width}, {tileset.tile_height})
         source.create_tile(Vector2i(0, 0))
         tile_set.add_source(source)
+        source_by_asset[entry["asset_id"]] = source
+
+    for rule in terrain_rules:
+        var source: TileSetAtlasSource = source_by_asset.get(rule["asset_id"])
+        if source == null:
+            continue
+        var terrain_id = terrain_names.find(rule["terrain"])
+        if terrain_id < 0:
+            continue
+        var data: TileData = source.get_tile_data(Vector2i(0, 0), 0)
+        data.terrain_set = 0
+        data.terrain = terrain_id
+        _apply_peering_bits(data, int(rule["neighbor_mask"]), terrain_id)
+
     var output = "res://godot4/tilesets/{tileset.id}.tres"
     ResourceSaver.save(tile_set, output)
     print("Game Creater TileSet saved: " + output)
@@ -193,8 +248,70 @@ func _run():
             json.dumps(game_ready, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        runtime_dir = pack_root / "Runtime"
         editor = pack_root / "Editor"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
         editor.mkdir(parents=True, exist_ok=True)
+        (runtime_dir / "GameCreaterAutoTile.cs").write_text(
+            r'''using System;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[Serializable]
+public class GameCreaterAutoTileRule
+{
+    public int neighborMask;
+    public int priority;
+    public Sprite sprite;
+}
+
+public class GameCreaterAutoTile : TileBase
+{
+    public string terrain;
+    public bool eightWay;
+    public GameCreaterAutoTileRule[] rules = Array.Empty<GameCreaterAutoTileRule>();
+
+    static readonly Vector3Int[] Directions = {
+        new Vector3Int(0, 1, 0), new Vector3Int(1, 1, 0), new Vector3Int(1, 0, 0), new Vector3Int(1, -1, 0),
+        new Vector3Int(0, -1, 0), new Vector3Int(-1, -1, 0), new Vector3Int(-1, 0, 0), new Vector3Int(-1, 1, 0)
+    };
+
+    public override void RefreshTile(Vector3Int position, ITilemap tilemap)
+    {
+        base.RefreshTile(position, tilemap);
+        for (var i = 0; i < Directions.Length; i++)
+        {
+            if (!eightWay && (i % 2 == 1)) continue;
+            tilemap.RefreshTile(position + Directions[i]);
+        }
+    }
+
+    public override void GetTileData(Vector3Int position, ITilemap tilemap, ref TileData tileData)
+    {
+        var mask = 0;
+        for (var i = 0; i < Directions.Length; i++)
+        {
+            if (!eightWay && (i % 2 == 1)) continue;
+            var other = tilemap.GetTile(position + Directions[i]) as GameCreaterAutoTile;
+            if (other != null && other.terrain == terrain) mask |= 1 << i;
+        }
+        GameCreaterAutoTileRule selected = null;
+        foreach (var rule in rules)
+        {
+            if (rule.neighborMask != mask) continue;
+            if (selected == null || rule.priority > selected.priority) selected = rule;
+        }
+        if (selected == null && rules.Length > 0) selected = rules[0];
+        tileData.sprite = selected != null ? selected.sprite : null;
+        tileData.colliderType = Tile.ColliderType.Sprite;
+        tileData.flags = TileFlags.LockTransform;
+        tileData.transform = Matrix4x4.identity;
+        tileData.color = Color.white;
+    }
+}
+''',
+            encoding="utf-8",
+        )
         (editor / "GameCreaterGameReady2DBuilder.cs").write_text(
             r'''using System;
 using System.IO;
@@ -206,7 +323,8 @@ using UnityEngine.Tilemaps;
 [Serializable] public class GCPoint { public float x; public float y; }
 [Serializable] public class GCPolygon { public string asset_id; public GCPoint[] points; public bool is_trigger; }
 [Serializable] public class GCAnimation { public string id; public string name; public string[] frame_asset_ids; public float fps; public bool loop; }
-[Serializable] public class GCTileSet { public string id; public string name; public string[] tile_asset_ids; public int tile_width; public int tile_height; public string[] terrain_tags; }
+[Serializable] public class GCTerrainRule { public string asset_id; public string terrain; public int neighbor_mask; public int priority; }
+[Serializable] public class GCTileSet { public string id; public string name; public string[] tile_asset_ids; public int tile_width; public int tile_height; public string[] terrain_tags; public string autotile_mode; public GCTerrainRule[] terrain_rules; }
 [Serializable] public class GCGameReady { public string schema; public string pack_id; public GCPolygon[] collision_polygons; public GCAnimation[] animations; public GCTileSet[] tilesets; }
 
 public static class GameCreaterGameReady2DBuilder
@@ -224,7 +342,7 @@ public static class GameCreaterGameReady2DBuilder
         BuildTiles(root, doc.tilesets ?? Array.Empty<GCTileSet>());
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log("Game Creater: built polygon colliders, animation clips and Tile assets.");
+        Debug.Log("Game Creater: built polygon colliders, animation clips, Tiles and AutoTiles.");
     }
 
     static void ApplyPolygons(string root, GCPolygon[] polygons)
@@ -291,6 +409,28 @@ public static class GameCreaterGameReady2DBuilder
                 var path = $"{folder}/{assetId}.asset";
                 if (AssetDatabase.LoadAssetAtPath<Tile>(path) != null) AssetDatabase.DeleteAsset(path);
                 AssetDatabase.CreateAsset(tile, path);
+            }
+
+            var rules = set.terrain_rules ?? Array.Empty<GCTerrainRule>();
+            if (set.autotile_mode == "none" || rules.Length == 0) continue;
+            foreach (var terrainGroup in rules.GroupBy(rule => rule.terrain))
+            {
+                var autoTile = ScriptableObject.CreateInstance<GameCreaterAutoTile>();
+                autoTile.terrain = terrainGroup.Key;
+                autoTile.eightWay = set.autotile_mode == "eight8";
+                autoTile.rules = terrainGroup
+                    .OrderByDescending(rule => rule.priority)
+                    .Select(rule => new GameCreaterAutoTileRule {
+                        neighborMask = rule.neighbor_mask,
+                        priority = rule.priority,
+                        sprite = AssetDatabase.LoadAssetAtPath<Sprite>($"{root}/assets/{rule.asset_id}.png")
+                    })
+                    .Where(rule => rule.sprite != null)
+                    .ToArray();
+                var safeTerrain = string.Concat(terrainGroup.Key.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_'));
+                var path = $"{folder}/Auto_{safeTerrain}.asset";
+                if (AssetDatabase.LoadAssetAtPath<GameCreaterAutoTile>(path) != null) AssetDatabase.DeleteAsset(path);
+                AssetDatabase.CreateAsset(autoTile, path);
             }
         }
     }
