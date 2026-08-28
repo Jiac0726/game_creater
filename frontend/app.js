@@ -35,6 +35,12 @@ const miniQueueCount = $("miniQueueCount");
 const miniTaskName = $("miniTaskName");
 const miniTaskDetail = $("miniTaskDetail");
 const miniPipelinePercent = $("miniPipelinePercent");
+const refreshLibraryBtn = $("refreshLibraryBtn");
+const sceneList = $("sceneList");
+const collapseScenesBtn = $("collapseScenesBtn");
+const gridViewBtn = $("gridViewBtn");
+const listViewBtn = $("listViewBtn");
+const thumbnailSize = $("thumbnailSize");
 const appRoot = document.querySelector(".app-root");
 const assetWorkspace = $("assetWorkspace");
 const semanticPanel = $("semanticPanel");
@@ -61,6 +67,9 @@ let dragStart = null;
 const selectedAssetIds = new Set();
 let pipelineTimer = null;
 let assetSearchQuery = "";
+let categoryFilter = "all";
+let tabFilter = "all";
+let libraryData = { scenes: [], asset_count: 0, category_counts: {} };
 
 function setPipelineProgress(percent, state) {
   const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
@@ -138,9 +147,20 @@ function failPipeline(detail) {
 
 function filterAssetRows() {
   const query = assetSearchQuery.trim().toLocaleLowerCase();
+  let visibleCount = 0;
   document.querySelectorAll(".asset-row-shell").forEach((row) => {
-    row.hidden = Boolean(query) && !row.textContent.toLocaleLowerCase().includes(query);
+    const category = row.dataset.category || "uncategorized";
+    const categoryMatch = categoryFilter === "all" || categoryFilter.split(",").includes(category);
+    const tabMatch = tabFilter === "all"
+      || (tabFilter === "background" && ["terrain", "material"].includes(category))
+      || (tabFilter === "ui" && category === "effect")
+      || (tabFilter === "sprite" && !["terrain", "material", "effect"].includes(category));
+    const searchable = `${row.dataset.label || ""} ${category} ${row.textContent}`.toLocaleLowerCase();
+    const queryMatch = !query || searchable.includes(query);
+    row.hidden = !(categoryMatch && tabMatch && queryMatch);
+    if (!row.hidden) visibleCount += 1;
   });
+  if (libraryFootCount) libraryFootCount.textContent = String(visibleCount);
 }
 
 function updateAssetSearch(value, source) {
@@ -198,11 +218,42 @@ document.querySelectorAll("[data-view-jump]").forEach((item) => {
   });
 });
 
-document.querySelectorAll(".library-tabs button").forEach((button) => {
+document.querySelectorAll(".library-tabs button[data-tab-filter]").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".library-tabs button").forEach((candidate) => candidate.classList.remove("active"));
     button.classList.add("active");
+    tabFilter = button.dataset.tabFilter || "all";
+    filterAssetRows();
   });
+});
+
+document.querySelectorAll("[data-category-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll("[data-category-filter]").forEach((candidate) => candidate.classList.remove("active"));
+    button.classList.add("active");
+    categoryFilter = button.dataset.categoryFilter || "all";
+    filterAssetRows();
+  });
+});
+
+document.querySelectorAll("[data-search-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll("[data-category-filter], [data-search-filter]").forEach((candidate) => candidate.classList.remove("active"));
+    button.classList.add("active");
+    categoryFilter = "all";
+    updateAssetSearch(button.dataset.searchFilter || "", null);
+  });
+});
+
+gridViewBtn?.addEventListener("click", () => setLibraryView("grid"));
+listViewBtn?.addEventListener("click", () => setLibraryView("list"));
+thumbnailSize?.addEventListener("input", () => {
+  assetList.style.setProperty("--asset-thumb-width", `${thumbnailSize.value}px`);
+});
+refreshLibraryBtn?.addEventListener("click", () => loadLibraryIndex(false));
+collapseScenesBtn?.addEventListener("click", () => {
+  sceneList?.classList.toggle("collapsed");
+  collapseScenesBtn.textContent = sceneList?.classList.contains("collapsed") ? "⌄" : "⌃";
 });
 
 importToggle?.addEventListener("click", () => importPopover?.classList.toggle("hidden"));
@@ -210,6 +261,87 @@ importClose?.addEventListener("click", () => importPopover?.classList.add("hidde
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") importPopover?.classList.add("hidden");
 });
+
+function setLibraryView(view) {
+  const listMode = view === "list";
+  assetList.classList.toggle("list-view", listMode);
+  gridViewBtn?.classList.toggle("active", !listMode);
+  listViewBtn?.classList.toggle("active", listMode);
+  if (thumbnailSize) thumbnailSize.disabled = listMode;
+}
+
+async function loadLibraryIndex(restoreLatest = false) {
+  refreshLibraryBtn?.classList.add("spinning");
+  try {
+    const response = await fetch("/api/v1/library");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "素材库读取失败");
+    libraryData = data;
+    renderSceneFiles();
+    if (restoreLatest && !currentManifest && data.scenes.length) {
+      await loadSceneFromLibrary(data.scenes[0].scene_id);
+    }
+  } catch (error) {
+    if (sceneList) sceneList.innerHTML = `<span class="scene-list-empty">${escapeHtml(error.message)}</span>`;
+    message.textContent = `素材库读取失败：${error.message}`;
+  } finally {
+    refreshLibraryBtn?.classList.remove("spinning");
+  }
+}
+
+function renderSceneFiles() {
+  if (!sceneList) return;
+  sceneList.innerHTML = "";
+  if (!libraryData.scenes.length) {
+    sceneList.innerHTML = '<span class="scene-list-empty">暂无历史场景，点击“AI 拆图”创建。</span>';
+    return;
+  }
+
+  libraryData.scenes.forEach((scene) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "scene-file";
+    button.dataset.sceneId = scene.scene_id;
+    button.classList.toggle("active", currentManifest?.scene_id === scene.scene_id);
+    button.innerHTML = `<i>◫</i><span><strong>${escapeHtml(scene.title)}</strong><small>workspace/${escapeHtml(scene.relative_path)}</small></span><b>${scene.asset_count}</b>`;
+    button.addEventListener("click", () => loadSceneFromLibrary(scene.scene_id));
+    sceneList.appendChild(button);
+  });
+}
+
+async function loadSceneFromLibrary(sceneId, selectedAssetId = null) {
+  message.textContent = `正在载入场景 ${sceneId}…`;
+  try {
+    const response = await fetch(`/api/v1/scenes/${sceneId}`);
+    const manifest = await response.json();
+    if (!response.ok) throw new Error(manifest.detail || "场景读取失败");
+    selectedAssetIds.clear();
+    currentSplitRect = null;
+    applyManifest(manifest, selectedAssetId);
+    renderSceneFiles();
+    message.textContent = `已载入：${sceneTitle(manifest)} · ${manifest.assets.length} 个素材`;
+  } catch (error) {
+    message.textContent = `载入失败：${error.message}`;
+  }
+}
+
+function sceneTitle(manifest) {
+  return manifest.prompts?.[0] || `场景 ${manifest.scene_id}`;
+}
+
+function updateCategoryCounts(manifest) {
+  const counts = manifest.assets.reduce((result, asset) => {
+    const category = asset.category || "uncategorized";
+    result[category] = (result[category] || 0) + 1;
+    return result;
+  }, {});
+  document.querySelectorAll("[data-category-count]").forEach((node) => {
+    const filter = node.dataset.categoryCount;
+    node.textContent = filter === "all"
+      ? String(manifest.assets.length)
+      : String(filter.split(",").reduce((sum, category) => sum + (counts[category] || 0), 0));
+  });
+}
 
 async function loadHealth() {
   health.classList.remove("ok", "bad");
@@ -349,6 +481,7 @@ analyzeBtn.addEventListener("click", async () => {
     applyManifest(data);
     message.textContent = `完成：${data.assets.length} 个素材 · 已生成 Overlay · 模式 ${data.mode}`;
     finishPipeline(data.assets.length);
+    loadLibraryIndex(false);
   } catch (error) {
     message.textContent = `失败：${error.message}`;
     failPipeline(error.message);
@@ -417,6 +550,8 @@ function renderAssets(manifest, selectedAssetId = null) {
   manifest.assets.forEach((asset) => {
     const row = document.createElement("div");
     row.className = "asset-row-shell";
+    row.dataset.category = asset.category || "uncategorized";
+    row.dataset.label = asset.label;
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -630,6 +765,10 @@ function applyManifest(manifest, selectedAssetId = null) {
   });
 
   renderAssets(manifest, selectedAssetId);
+  updateCategoryCounts(manifest);
+  renderSceneFiles();
+  const projectTitle = document.querySelector(".project-switcher strong");
+  if (projectTitle) projectTitle.textContent = sceneTitle(manifest);
   refreshOverlay(manifest);
 
   manifestLink.href = `/workspace/${manifest.scene_id}/scene.json?v=${Date.now()}`;
@@ -729,3 +868,4 @@ function escapeAttribute(value) {
 
 activateView(appRoot?.dataset.currentView || "assets");
 loadHealth();
+loadLibraryIndex(true);

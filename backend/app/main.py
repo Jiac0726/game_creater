@@ -29,6 +29,7 @@ from app.services.asset_editor import AssetEditor
 from app.services.birefnet_sidecar import BiRefNetSidecarError
 from app.services.edge_refinement import EdgeRefinementService
 from app.services.godot_exporter import GodotExporter
+from app.services.library_index import LibraryIndex
 from app.services.pipeline import AssetSplitPipeline
 from app.services.scene_recommender import SceneRecommender
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
@@ -64,6 +65,7 @@ scene_recommender = SceneRecommender()
 edge_refiner = EdgeRefinementService(WORKSPACE)
 godot_exporter = GodotExporter(WORKSPACE, EXPORTS)
 unity_exporter = UnityExporter(WORKSPACE, EXPORTS)
+library_index = LibraryIndex(WORKSPACE)
 app.include_router(build_workflow_router(WORKSPACE, pipeline))
 
 
@@ -100,6 +102,23 @@ def health() -> dict:
 @app.get("/api/v1/models/status")
 def model_status() -> dict:
     return pipeline.health()
+
+
+@app.get("/api/v1/library")
+def get_library_index() -> dict:
+    return library_index.build()
+
+
+@app.get("/api/v1/scenes/{scene_id}", response_model=SceneManifest)
+def get_scene(scene_id: str) -> SceneManifest:
+    _validate_scene_id(scene_id)
+    try:
+        manifest = scene_store.load(scene_id)
+        if not library_index.manifest_paths_are_safe(manifest):
+            raise HTTPException(status_code=400, detail="Scene contains an invalid project-relative path")
+        return manifest
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
 
 
 @app.get("/api/v1/edge-refiner/status")

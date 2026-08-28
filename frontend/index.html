@@ -64,7 +64,7 @@
 
       <section id="assetWorkspace" class="workspace" data-view="assets,scene">
         <aside class="card panel library-panel">
-          <div class="panel-title panel-title-rich"><span><b>素材库</b><small>PROJECT ASSETS</small></span><span class="panel-tools"><button title="筛选">≡</button><button title="刷新">↻</button></span></div>
+          <div class="panel-title panel-title-rich"><span><b>素材库</b><small>PROJECT ASSETS</small></span><span class="panel-tools"><button title="筛选">≡</button><button id="refreshLibraryBtn" title="刷新素材库">↻</button></span></div>
           <div class="library-main">
             <div class="library-sidebar">
               <button id="importToggle" class="library-ai-button" type="button"><span>✦</span> AI 拆图</button>
@@ -74,26 +74,29 @@
                 <label class="command-field"><span>检测关键词</span><input id="promptInput" value="tree, rock, house, crate, grass" /></label>
                 <button id="analyzeBtn" class="analyze-button" type="button"><span>✦</span> 开始 AI 拆图</button>
               </div>
-              <div class="library-tabs" role="tablist" aria-label="素材筛选"><button class="active" type="button">全部</button><button type="button">精灵</button><button type="button">背景</button><button type="button">UI</button></div>
+              <div class="taxonomy-title scene-title"><span>项目文件 <em>仅 workspace/</em></span><button id="collapseScenesBtn" type="button">⌃</button></div>
+              <div id="sceneList" class="scene-list"><span class="scene-list-empty">正在读取本地场景…</span></div>
+              <div class="library-tabs" role="tablist" aria-label="素材筛选"><button class="active" type="button" data-tab-filter="all">全部</button><button type="button" data-tab-filter="sprite">精灵</button><button type="button" data-tab-filter="background">背景</button><button type="button" data-tab-filter="ui">UI</button></div>
               <div class="taxonomy-title"><span>文件夹</span><button type="button">＋</button></div>
               <div class="folder-tree">
-                <button type="button"><span>▰ 全部素材</span><b>1,248</b></button>
-                <button type="button"><span>▰ 场景</span><b>126</b></button>
-                <button type="button"><span>▰ 角色</span><b>243</b></button>
-                <button class="active" type="button"><span>▰ 建筑</span><b>312</b></button>
-                <button type="button"><span>▰ 植被</span><b>278</b></button>
-                <button type="button"><span>▰ 道具</span><b>187</b></button>
-                <button type="button"><span>▰ 特效</span><b>102</b></button>
+                <button class="active" type="button" data-category-filter="all"><span>▰ 全部素材</span><b data-category-count="all">0</b></button>
+                <button type="button" data-category-filter="uncategorized"><span>▰ 未分类</span><b data-category-count="uncategorized">0</b></button>
+                <button type="button" data-category-filter="building,structure"><span>▰ 建筑</span><b data-category-count="building,structure">0</b></button>
+                <button type="button" data-category-filter="vegetation"><span>▰ 植被</span><b data-category-count="vegetation">0</b></button>
+                <button type="button" data-category-filter="prop"><span>▰ 道具</span><b data-category-count="prop">0</b></button>
+                <button type="button" data-category-filter="terrain,material"><span>▰ 地形</span><b data-category-count="terrain,material">0</b></button>
+                <button type="button" data-category-filter="creature"><span>▰ 角色</span><b data-category-count="creature">0</b></button>
+                <button type="button" data-category-filter="effect"><span>▰ 特效</span><b data-category-count="effect">0</b></button>
               </div>
               <div class="taxonomy-title tags-title"><span>标签</span><button type="button">＋</button></div>
-              <div class="tag-list"><span><i class="tag-cyan"></i>building <b>312</b></span><span><i class="tag-green"></i>tree <b>278</b></span><span><i class="tag-orange"></i>prop <b>187</b></span><span><i class="tag-violet"></i>npc <b>243</b></span></div>
+              <div class="tag-list"><button type="button" data-category-filter="building,structure"><i class="tag-cyan"></i>building <b data-category-count="building,structure">0</b></button><button type="button" data-search-filter="tree"><i class="tag-green"></i>tree <b>标签</b></button><button type="button" data-category-filter="prop"><i class="tag-orange"></i>prop <b data-category-count="prop">0</b></button><button type="button" data-category-filter="creature"><i class="tag-violet"></i>npc <b data-category-count="creature">0</b></button></div>
             </div>
             <div class="library-results">
-              <div class="asset-searchline"><label><span>⌕</span><input id="librarySearch" type="search" placeholder="搜索当前文件夹…" /></label><button type="button">▦</button><button type="button">☷</button></div>
+              <div class="asset-searchline"><label><span>⌕</span><input id="librarySearch" type="search" placeholder="搜索当前文件夹…" /></label><button id="gridViewBtn" class="active" type="button" title="网格视图">▦</button><button id="listViewBtn" type="button" title="列表视图">☷</button></div>
               <div class="library-folder-head"><span>建筑素材</span><b id="assetCount">0 项</b></div>
               <div id="selectionBar" class="selection-bar hidden"><span id="selectionCount">已选 0</span><button id="mergeSelectedBtn" disabled>合并选中</button></div>
               <div id="assetList" class="asset-list empty"><div class="empty-state compact"><span class="empty-icon">▦</span><strong>素材库等待内容</strong><small>点击左侧“AI 拆图”导入场景。</small></div></div>
-              <div class="library-foot"><span>共 <b id="libraryFootCount">0</b> 项</span><input type="range" min="60" max="120" value="88" aria-label="缩略图大小" /></div>
+              <div class="library-foot"><span>显示 <b id="libraryFootCount">0</b> 项</span><input id="thumbnailSize" type="range" min="74" max="150" value="105" aria-label="缩略图大小" /></div>
             </div>
           </div>
         </aside>
