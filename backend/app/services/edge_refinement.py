@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import numpy as np
 from PIL import Image, ImageFilter
 
 from app.models import AssetRecord
+from app.services.asset_library import AssetLibrary
 from app.services.birefnet_sidecar import BiRefNetSidecarClient
 from app.services.scene_store import AssetNotFoundError, SceneStore
 
@@ -13,10 +15,8 @@ from app.services.scene_store import AssetNotFoundError, SceneStore
 class EdgeRefinementService:
     """Refine only the soft alpha around an existing SAM mask boundary.
 
-    The binary mask and bbox remain unchanged. BiRefNet receives a padded crop
-    for visual context, but its prediction is gated by a narrow dilation/erosion
-    band derived from the SAM mask. This prevents a foreground model from
-    replacing the semantic ownership already decided by GroundingDINO + SAM2.
+    The binary mask and bbox remain unchanged. The refined RGBA is stored as a
+    new asset version instead of overwriting the original segmented PNG.
     """
 
     def __init__(
@@ -26,6 +26,7 @@ class EdgeRefinementService:
     ) -> None:
         self.workspace = Path(workspace)
         self.store = SceneStore(self.workspace)
+        self.library = AssetLibrary(self.workspace)
         self.client = client or BiRefNetSidecarClient()
 
     def health(self) -> dict:
@@ -40,7 +41,6 @@ class EdgeRefinementService:
             raise ValueError("Scene has no retained source image")
         source_path = scene_dir / manifest.source_file
         mask_path = scene_dir / asset.mask
-        image_path = scene_dir / asset.image
         if not source_path.is_file():
             raise ValueError("Retained source image is missing")
         if not mask_path.is_file():
@@ -87,10 +87,6 @@ class EdgeRefinementService:
         refined[core] = 255
         band = support & ~core
         refined[band] = pred[band]
-
-        # Do not let an uncertain foreground model erase pixels that SAM already
-        # considered part of the object. In the boundary band, keep a modest
-        # interior alpha floor while still allowing soft semi-transparent edges.
         inside_band = mask_arr & band
         refined[inside_band] = np.maximum(refined[inside_band], 128)
 
@@ -99,9 +95,35 @@ class EdgeRefinementService:
             raise ValueError("Refined alpha crop does not match asset dimensions")
 
         rgba = source.crop((x1, y1, x2, y2)).convert("RGBA")
-        rgba.putalpha(Image.fromarray(local, mode="L"))
-        image_path.parent.mkdir(parents=True, exist_ok=True)
-        rgba.save(image_path)
+        alpha_image = Image.fromarray(local, mode="L")
+        rgba.putalpha(alpha_image)
+
+        versions_dir = scene_dir / "versions"
+        versions_dir.mkdir(parents=True, exist_ok=True)
+        token = uuid4().hex[:8]
+        image_rel = f"versions/{asset.id}_birefnet_{token}.png"
+        alpha_rel = f"versions/{asset.id}_birefnet_{token}_alpha.png"
+        rgba.save(scene_dir / image_rel)
+        alpha_image.save(scene_dir / alpha_rel)
+
+        asset.image = image_rel
+        asset.alpha = alpha_rel
+        self.store.save(manifest)
+
+        if asset.library_asset_id:
+            self.library.add_version(
+                asset.library_asset_id,
+                kind="birefnet_refined",
+                image_path=f"{scene_id}/{image_rel}",
+                mask_path=f"{scene_id}/{asset.mask}",
+                alpha_path=f"{scene_id}/{alpha_rel}",
+                metadata={
+                    "radius": radius,
+                    "hard_mask_unchanged": True,
+                    "bbox_unchanged": True,
+                },
+                activate=True,
+            )
         return asset
 
     @staticmethod
