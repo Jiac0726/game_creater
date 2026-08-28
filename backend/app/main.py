@@ -28,6 +28,7 @@ from app.models import (
 from app.services.asset_editor import AssetEditor
 from app.services.birefnet_sidecar import BiRefNetSidecarError
 from app.services.edge_refinement import EdgeRefinementService
+from app.services.godot_exporter import GodotExporter
 from app.services.pipeline import AssetSplitPipeline
 from app.services.scene_recommender import SceneRecommender
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
@@ -44,7 +45,7 @@ EXPORTS.mkdir(parents=True, exist_ok=True)
 SCENE_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 EDGE_REFINER_MODE = os.getenv("GAME_CREATER_EDGE_REFINER", "none").strip().lower()
 
-app = FastAPI(title="Game Creater", version="0.4.0-dev")
+app = FastAPI(title="Game Creater", version="0.5.0-dev")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -59,6 +60,7 @@ asset_editor = AssetEditor(WORKSPACE)
 semantic_engine = SemanticEngine()
 scene_recommender = SceneRecommender()
 edge_refiner = EdgeRefinementService(WORKSPACE)
+godot_exporter = GodotExporter(WORKSPACE, EXPORTS)
 
 
 def _edge_status() -> dict:
@@ -74,7 +76,7 @@ def health() -> dict:
     return {
         "ok": True,
         "mode": pipeline.mode,
-        "version": "0.4.0-dev",
+        "version": "0.5.0-dev",
         "model": model,
         "semantic": {
             "ready": True,
@@ -86,6 +88,7 @@ def health() -> dict:
             "enabled": EDGE_REFINER_MODE == "birefnet_sidecar",
             "mode": EDGE_REFINER_MODE,
         },
+        "engine_export": {"godot4": True},
     }
 
 
@@ -353,6 +356,23 @@ def export_scene(scene_id: str) -> FileResponse:
         path=archive_path,
         media_type="application/zip",
         filename=f"game_creater_{scene_id}.zip",
+    )
+
+
+@app.get("/api/v1/scenes/{scene_id}/export/godot.zip")
+def export_scene_godot(scene_id: str) -> FileResponse:
+    _validate_scene_id(scene_id)
+    try:
+        archive_path = godot_exporter.export(scene_id)
+    except SceneNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Scene not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return FileResponse(
+        path=archive_path,
+        media_type="application/zip",
+        filename=f"game_creater_{scene_id}_godot4.zip",
     )
 
 
