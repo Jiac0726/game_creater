@@ -185,6 +185,8 @@ const VIEW_LABELS = {
   scene: "场景工作台",
   semantic: "语义联想",
   workflow: "工作流",
+  "global-library": "高级素材库",
+  store: "素材商店",
   export: "导出与交付",
 };
 

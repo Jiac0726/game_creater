@@ -42,9 +42,11 @@
       <button class="rail-item" type="button" data-view-name="scene"><span class="rail-icon">◫</span><span>场景</span></button>
       <button class="rail-item" type="button" data-view-name="semantic"><span class="rail-icon">✦</span><span>语义</span></button>
       <button class="rail-item" type="button" data-view-name="workflow"><span class="rail-icon">⇆</span><span>工作流</span></button>
+      <button class="rail-item" type="button" data-view-name="global-library"><span class="rail-icon">◆</span><span>高级库</span></button>
+      <button class="rail-item" type="button" data-view-name="store"><span class="rail-icon">◇</span><span>商店</span></button>
       <button class="rail-item" type="button" data-view-name="export"><span class="rail-icon">⇩</span><span>导出</span></button>
       <div class="rail-spacer"></div>
-      <div class="rail-version">v0.6</div>
+      <div class="rail-version">v1.1</div>
     </nav>
 
     <main class="studio-shell">
@@ -141,6 +143,14 @@
       <section class="tool-drawer-grid view-hidden" data-view="workflow">
         <details class="card tool-drawer"><summary><span><b>SAM2 点选修正</b><small>正点包含目标，负点排除背景</small></span><span id="samPointStatus" class="sam-point-status">未启用</span><i>⌄</i></summary><div class="sam-panel"><div class="sam-controls"><label><span>素材名称</span><input id="samLabelInput" placeholder="新建素材名称；精修时自动带入当前素材" /></label><div class="sam-actions"><button id="samNewBtn">新建素材</button><button id="samRefineBtn">精修当前素材</button></div><div class="sam-polarity"><button id="samPositiveBtn" disabled>正点 +</button><button id="samNegativeBtn" disabled>负点 −</button></div><div class="sam-actions"><button id="samClearBtn" disabled>清空点</button><button id="samRunBtn" disabled>生成 / 更新 Mask</button><button id="samCancelBtn" disabled>退出点选</button></div></div></div></details>
         <details class="card tool-drawer"><summary><span><b>BiRefNet 边缘优化</b><small>优化透明边缘，不改变二值 Mask</small></span><span id="edgeRefineStatus" class="edge-status">检查中…</span><i>⌄</i></summary><div class="edge-panel"><div class="edge-controls"><label><span>边界半径(px)</span><input id="edgeRadius" type="number" min="1" max="24" value="6" /></label><button id="edgeRefineBtn" disabled>BiRefNet 精修当前素材</button><div class="edge-note">BiRefNet 仅参与 SAM 边界带的软 Alpha，硬 Mask 仍用于合并、拆分和游戏配置。</div></div></div></details>
+      </section>
+
+      <section class="extension-frame-page view-hidden" data-view="global-library" aria-label="完整素材工作流">
+        <iframe src="/asset_library_full.html" title="完整素材库工作流"></iframe>
+      </section>
+
+      <section class="extension-frame-page view-hidden" data-view="store" aria-label="素材商店">
+        <iframe src="/asset_store.html" title="素材商店"></iframe>
       </section>
 
       <section id="exportDock" class="card export-page view-hidden" data-view="export">

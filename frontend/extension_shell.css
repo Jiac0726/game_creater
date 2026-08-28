@@ -1,0 +1,128 @@
+:root {
+  font-family: Inter, "Segoe UI Variable", "Microsoft YaHei UI", system-ui, sans-serif;
+  background: #0c1115;
+}
+
+html {
+  background: #0c1115;
+}
+
+body.extension-shell {
+  min-width: 1040px;
+  min-height: 100vh;
+  margin: 0;
+  overflow: auto;
+  background:
+    radial-gradient(circle at 45% -15%, rgba(34, 184, 181, .08), transparent 34%),
+    #0c1115;
+  color: #e5edef;
+}
+
+.extension-shell-main {
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.extension-shell-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin: -18px -18px 14px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #273138;
+  background: rgba(13, 18, 22, .96);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
+  backdrop-filter: blur(12px);
+}
+
+.extension-shell-title {
+  display: grid;
+  gap: 3px;
+}
+
+.extension-shell-title strong {
+  color: #edf4f5;
+  font-size: 14px;
+}
+
+.extension-shell-title span {
+  color: #708087;
+  font-size: 10px;
+}
+
+.extension-shell-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid rgba(34, 184, 181, .32);
+  border-radius: 999px;
+  background: rgba(34, 184, 181, .08);
+  color: #8adfdb;
+  font-size: 10px;
+}
+
+.extension-shell-scope::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22b8b5;
+  box-shadow: 0 0 7px rgba(34, 184, 181, .6);
+  content: "";
+}
+
+.extension-shell .card {
+  margin-bottom: 12px;
+  border-color: #273138;
+  border-radius: 8px;
+  background: rgba(19, 26, 31, .94);
+}
+
+.extension-shell button {
+  border: 1px solid #34434a;
+  border-radius: 5px;
+  background: #182126;
+  color: #cbd6d9;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.extension-shell button:hover {
+  border-color: rgba(34, 184, 181, .55);
+  color: #9be7e3;
+}
+
+.extension-shell input,
+.extension-shell select,
+.extension-shell textarea {
+  border: 1px solid #303d44;
+  border-radius: 5px;
+  background: #0f1519;
+  color: #dce5e7;
+  padding: 7px 8px;
+}
+
+.extension-shell .footerbar {
+  display: none;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0e1317;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid #0e1317;
+  border-radius: 10px;
+  background: #303b42;
+}
