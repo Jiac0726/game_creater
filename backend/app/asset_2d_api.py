@@ -8,6 +8,7 @@ from app.asset_2d_models import (
     AnimationClip,
     AnimationClipCreateRequest,
     AnimationClipPatch,
+    AnimationFrameSequenceRequest,
     CollisionPolygon,
     CollisionPolygonGenerateRequest,
     CollisionPolygonPatch,
@@ -80,6 +81,17 @@ def build_asset_2d_router(workspace: str | Path, pipeline: AssetSplitPipeline) -
     def patch_animation(clip_id: str, patch: AnimationClipPatch) -> AnimationClip:
         try:
             return resources.patch_animation(clip_id, patch)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Animation not found") from exc
+        except LibraryAssetNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Library asset not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.put("/animations/{clip_id}/frames", response_model=AnimationClip)
+    def set_animation_frames(clip_id: str, request: AnimationFrameSequenceRequest) -> AnimationClip:
+        try:
+            return resources.set_animation_frames(clip_id, request)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Animation not found") from exc
         except LibraryAssetNotFoundError as exc:
