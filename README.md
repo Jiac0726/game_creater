@@ -325,11 +325,11 @@ POST /api/v1/scenes/<scene_id>/assets/point-segment
 
 ## 部署说明
 
-当前版本定位为 localhost / 本地优先开发工具。不要直接将开发服务器暴露到公网。
+当前版本定位为 localhost / 本地优先开发工具。当前开发版 SQLite 与工作区同属本地运行状态，因此 **不要直接将 FastAPI 开发服务器暴露到公网**。
 
 桌面化 / 多用户阶段将进一步处理：
 
-- SQLite 迁至专用 private state 目录
+- SQLite 迁至不经过 StaticFiles 的专用 private state 目录
 - 用户权限 / 资源访问控制
 - Schema migration
 - 大规模库可切换 PostgreSQL
