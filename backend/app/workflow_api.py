@@ -12,6 +12,7 @@ from app.asset_runtime_api import build_asset_runtime_router
 from app.asset_workflow_api import build_asset_workflow_router
 from app.asset_workflow_maintenance_api import build_asset_workflow_maintenance_router
 from app.completion_models import AssetCompletionRequest, AssetCompletionResult
+from app.scene_composer_api import build_scene_composer_router
 from app.services.completion_providers import CompletionError
 from app.services.completion_service import CompletionService
 from app.services.generation_providers import ImageGenerationError
@@ -34,6 +35,7 @@ def build_workflow_router(workspace: str | Path, pipeline: AssetSplitPipeline) -
     router.include_router(build_asset_workflow_maintenance_router(workspace, pipeline))
     router.include_router(build_asset_runtime_router(workspace, pipeline))
     router.include_router(build_asset_2d_router(workspace, pipeline))
+    router.include_router(build_scene_composer_router(workspace))
     router.include_router(ai_control_router)
 
     @router.get("/generation/providers")
