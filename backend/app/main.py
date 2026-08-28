@@ -34,6 +34,7 @@ from app.services.scene_recommender import SceneRecommender
 from app.services.scene_store import AssetNotFoundError, SceneNotFoundError, SceneStore
 from app.services.semantic_engine import SemanticEngine
 from app.services.unity_exporter import UnityExporter
+from app.store_api import build_store_router
 from app.workflow_api import build_workflow_router
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -47,7 +48,7 @@ EXPORTS.mkdir(parents=True, exist_ok=True)
 SCENE_ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 EDGE_REFINER_MODE = os.getenv("GAME_CREATER_EDGE_REFINER", "none").strip().lower()
 
-app = FastAPI(title="Game Creater", version="1.0.0-dev")
+app = FastAPI(title="Game Creater", version="1.1.0-dev")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -65,6 +66,7 @@ edge_refiner = EdgeRefinementService(WORKSPACE)
 godot_exporter = GodotExporter(WORKSPACE, EXPORTS)
 unity_exporter = UnityExporter(WORKSPACE, EXPORTS)
 app.include_router(build_workflow_router(WORKSPACE, pipeline))
+app.include_router(build_store_router(WORKSPACE), prefix="/api/v1")
 
 
 def _edge_status() -> dict:
@@ -80,7 +82,7 @@ def health() -> dict:
     return {
         "ok": True,
         "mode": pipeline.mode,
-        "version": "1.0.0-dev",
+        "version": "1.1.0-dev",
         "model": model,
         "semantic": {
             "ready": True,
@@ -93,6 +95,7 @@ def health() -> dict:
             "mode": EDGE_REFINER_MODE,
         },
         "generation_workflow": True,
+        "asset_store": True,
         "engine_export": {"godot4": True, "unity2d": True},
     }
 
