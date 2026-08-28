@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import shutil
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from PIL import Image, ImageDraw
 from app.models import AssetRecord, BBox, SceneManifest
 from app.services.asset_scoring import score_asset
 from app.services.grounded_sam2_local import GroundedSam2LocalAdapter
+from app.services.scene_store import SceneStore
 from app.services.semantic_scoring import semantic_asset_value
 
 
@@ -41,6 +41,7 @@ class AssetSplitPipeline:
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.mode = os.getenv("GAME_CREATER_MODE", "mock").strip().lower()
         self._grounded_adapter: GroundedSam2LocalAdapter | None = None
+        self.scene_store = SceneStore(self.workspace)
 
     def health(self) -> dict[str, Any]:
         if self.mode == "mock":
@@ -156,10 +157,9 @@ class AssetSplitPipeline:
             source_file=source_file,
             inference_stats=inference_stats,
         )
-        (project_dir / "scene.json").write_text(
-            json.dumps(manifest.model_dump(), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        # SceneStore assigns stable library_asset_id values and indexes all
+        # extracted assets in SQLite before persisting scene.json.
+        self.scene_store.save(manifest)
         return manifest
 
     def _mock_detect(self, width: int, height: int, prompts: list[str]) -> list[Detection]:
