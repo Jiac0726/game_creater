@@ -33,6 +33,14 @@ class LibraryAssetPatch(BaseModel):
     tags: Optional[list[str]] = None
 
 
+class BulkLibraryAssetPatch(BaseModel):
+    asset_ids: list[str] = Field(min_length=1, max_length=500)
+    review_state: Optional[AssetReviewState] = None
+    favorite: Optional[bool] = None
+    add_tags: list[str] = Field(default_factory=list)
+    remove_tags: list[str] = Field(default_factory=list)
+
+
 class CreateCollectionRequest(BaseModel):
     name: str
     description: str = ""
