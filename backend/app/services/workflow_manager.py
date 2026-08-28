@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
+from app.completion_models import AssetCompletionResult
 from app.services.generation_providers import (
     ImageGenerationError,
     ImageGenerationProviderRegistry,
@@ -13,6 +14,7 @@ from app.services.project_store import ProjectStore
 from app.services.prompt_builder import PromptBuilder
 from app.services.semantic_engine import SemanticEngine
 from app.workflow_models import (
+    CompletionJob,
     GenerationSpec,
     ProjectRecord,
     RunProjectRequest,
@@ -135,6 +137,43 @@ class WorkflowManager:
             if isinstance(exc, (ImageGenerationError, ValueError, RuntimeError)):
                 raise
             raise RuntimeError(str(exc)) from exc
+
+    def record_completion(self, result: AssetCompletionResult) -> ProjectRecord | None:
+        record = self.store.find_by_scene(result.scene_id)
+        if record is None:
+            return None
+
+        self.store.event(
+            record,
+            WorkflowStage.COMPLETING,
+            f"Completing asset {result.asset_id} with {result.provider}",
+            data={"job_id": result.job_id, "asset_id": result.asset_id},
+        )
+        record.completion_jobs.append(
+            CompletionJob(
+                id=result.job_id,
+                asset_id=result.asset_id,
+                mode=result.mode,
+                status="completed",
+                provider=result.provider,
+                source_asset=result.source_asset,
+                output_asset=result.completed_asset,
+                metadata={
+                    "completed_scene": result.completed_scene,
+                    "completed_mask": result.completed_mask,
+                    "rect": result.rect.model_dump(),
+                    "resegmented": result.resegmented,
+                    "confidence": result.confidence,
+                },
+            )
+        )
+        self.store.event(
+            record,
+            WorkflowStage.ASSET_REVIEW,
+            "Completion result stored for review; original asset preserved",
+            data={"job_id": result.job_id, "output_asset": result.completed_asset},
+        )
+        return self.store.load(record.project_id)
 
     def load(self, project_id: str) -> ProjectRecord:
         return self.store.load(project_id)
