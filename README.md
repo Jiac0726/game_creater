@@ -131,7 +131,7 @@ Mock 付费模拟可关闭：
 export GAME_CREATER_ALLOW_MOCK_PAID=0
 ```
 
-**当前版本不是可直接公网运营的商城。** 正式上线前还需要用户账户、创作者身份、真实支付、退款/税务、分账、对象存储、签名下载、审核/投诉和多租户权限。
+**当前版本是本地 Marketplace MVP，不是可直接公网运营的商城。** 正式上线前还需要用户账户、创作者身份、真实支付、退款/税务、分账、对象存储、签名下载、审核/投诉和多租户权限。
 
 ## 快速启动：Mock
 
@@ -212,19 +212,19 @@ POST  /api/v1/library/reindex
 ### Asset Store
 
 ```text
-GET   /api/v1/store/stats
-GET   /api/v1/store/listings
-GET   /api/v1/store/payment/providers
-GET   /api/v1/store/seller/listings
-POST  /api/v1/store/seller/listings
-PATCH /api/v1/store/seller/listings/<listing_id>
-GET   /api/v1/store/cart
-POST  /api/v1/store/cart/<listing_id>
+GET    /api/v1/store/stats
+GET    /api/v1/store/listings
+GET    /api/v1/store/payment/providers
+GET    /api/v1/store/seller/listings
+POST   /api/v1/store/seller/listings
+PATCH  /api/v1/store/seller/listings/<listing_id>
+GET    /api/v1/store/cart
+POST   /api/v1/store/cart/<listing_id>
 DELETE /api/v1/store/cart/<listing_id>
-POST  /api/v1/store/checkout
-GET   /api/v1/store/orders
-GET   /api/v1/store/library
-GET   /api/v1/store/downloads/<entitlement_id>
+POST   /api/v1/store/checkout
+GET    /api/v1/store/orders
+GET    /api/v1/store/library
+GET    /api/v1/store/downloads/<entitlement_id>
 ```
 
 ## 目前部署边界
