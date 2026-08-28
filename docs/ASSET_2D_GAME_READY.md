@@ -5,8 +5,8 @@ PR #3 extends Asset Library from reusable PNG management into engine-ready 2D re
 ```text
 Asset Library
 ├─ Polygon Collision
-├─ Sprite Animation
-├─ TileSet
+├─ Sprite Animation / Frame Workbench
+├─ TileSet / Terrain / Autotile
 └─ Game Ready Pack
    ├─ Generic
    ├─ Godot 4
@@ -17,13 +17,7 @@ All operations are typed `/api/v1/*` APIs and are automatically exposed by the A
 
 ## Polygon Collision
 
-Runtime config now supports:
-
-```json
-{
-  "collision_mode": "polygon"
-}
-```
+Runtime config supports `collision_mode: polygon`.
 
 Generate an initial polygon from the active Mask / Alpha:
 
@@ -31,33 +25,20 @@ Generate an initial polygon from the active Mask / Alpha:
 POST /api/v1/library/assets/<asset_id>/collision-polygon/generate
 ```
 
-Example:
-
-```json
-{
-  "alpha_threshold": 1,
-  "max_points": 24
-}
-```
-
 The automatic generator deliberately uses a dependency-free convex hull. It is intended as a stable first pass, not as a perfect concave outline.
 
-Read or manually/AI edit the normalized points:
+Read or manually/AI edit normalized points:
 
 ```text
 GET   /api/v1/library/assets/<asset_id>/collision-polygon
 PATCH /api/v1/library/assets/<asset_id>/collision-polygon
 ```
 
-Points use normalized image coordinates (`0..1`) so the same polygon can be converted into different engine coordinate systems.
+Points use normalized image coordinates (`0..1`). Godot export converts them to `CollisionPolygon2D`; Unity export converts them to local Sprite units and calls `PolygonCollider2D.SetPath`.
 
-Godot game-ready export converts the normalized polygon into native `CollisionPolygon2D` coordinates and writes the flat-number `PackedVector2Array(...)` representation expected by `.tscn` text resources.
+## Sprite Animation and frame sequencing
 
-Unity game-ready export converts the same points into local Sprite units and calls `PolygonCollider2D.SetPath` in the generated Editor builder.
-
-## Sprite Animation
-
-Create an animation clip from ordered Library Asset IDs:
+Create an animation from ordered Library Asset IDs:
 
 ```text
 POST /api/v1/library/animations
@@ -72,85 +53,99 @@ POST /api/v1/library/animations
 }
 ```
 
-Frame order is preserved and duplicate frame IDs are allowed intentionally.
+Frame order is preserved and duplicate frame IDs are valid.
 
-APIs:
+The dedicated frame-sequence operation is:
 
 ```text
-GET   /api/v1/library/animations
-POST  /api/v1/library/animations
-GET   /api/v1/library/animations/<animation_id>
-PATCH /api/v1/library/animations/<animation_id>
+PUT /api/v1/library/animations/<animation_id>/frames
 ```
+
+Strict reorder example:
+
+```json
+{
+  "frame_asset_ids": ["asset_c", "asset_a", "asset_b"],
+  "require_same_frames": true
+}
+```
+
+With `require_same_frames=true`, the backend compares the frame multiset and rejects accidental frame additions/removals. Set it to `false` when intentionally duplicating or deleting a frame.
+
+The Human UI provides a frame workbench with drag reorder, up/down movement, duplicate and remove operations.
 
 ### Godot 4
 
-Game Ready Pack generates:
-
-```text
-godot4/animations/<animation_id>.tscn
-```
-
-The scene contains a native `AnimatedSprite2D` and embedded `SpriteFrames` resource using the exported frame textures.
+Game Ready Pack generates `godot4/animations/<animation_id>.tscn` containing native `AnimatedSprite2D` and embedded `SpriteFrames`.
 
 ### Unity 2D
 
-The generated `GameCreaterGameReady2DBuilder.cs` creates native `.anim` files through `AnimationClip` and `AnimationUtility.SetObjectReferenceCurve`, targeting `SpriteRenderer.m_Sprite`.
+The generated Editor builder creates native `.anim` files through `AnimationClip` and `AnimationUtility.SetObjectReferenceCurve`, targeting `SpriteRenderer.m_Sprite`.
 
-## TileSet
+## TileSet, Terrain and Autotile
 
-Create a TileSet definition from Library Assets:
+Create a TileSet definition:
 
 ```text
 POST /api/v1/library/tilesets
 ```
 
+Basic fields remain `tile_asset_ids`, tile width/height and terrain tags. Autotile adds:
+
 ```json
 {
-  "name": "forest_ground",
-  "tile_asset_ids": ["asset_grass", "asset_dirt", "asset_edge"],
-  "tile_width": 32,
-  "tile_height": 32,
-  "terrain_tags": ["ground", "grass"]
+  "autotile_mode": "cardinal4",
+  "terrain_rules": [
+    {
+      "asset_id": "asset_grass_isolated",
+      "terrain": "grass",
+      "neighbor_mask": 0,
+      "priority": 0
+    },
+    {
+      "asset_id": "asset_grass_full",
+      "terrain": "grass",
+      "neighbor_mask": 85,
+      "priority": 10
+    }
+  ]
 }
 ```
 
-APIs:
+Modes:
 
 ```text
-GET   /api/v1/library/tilesets
-POST  /api/v1/library/tilesets
-GET   /api/v1/library/tilesets/<tileset_id>
-PATCH /api/v1/library/tilesets/<tileset_id>
+none
+cardinal4
+ eight8
 ```
 
-### Godot 4
-
-Game Ready Pack contains:
+Neighbor bits are stable and engine-independent:
 
 ```text
-godot4/tilesets/
-  build_<tileset_id>.gd
-  <tileset_id>.json
+N  = 1
+NE = 2
+E  = 4
+SE = 8
+S  = 16
+SW = 32
+W  = 64
+NW = 128
 ```
 
-Run the generated `EditorScript` once in the Godot editor. It creates a native `TileSet` resource using `TileSetAtlasSource` and saves:
+For `cardinal4`, only N/E/S/W bits are accepted; a fully connected cardinal tile is `1 + 4 + 16 + 64 = 85`. `eight8` accepts `0..255`.
 
-```text
-godot4/tilesets/<tileset_id>.tres
-```
+Each Tile asset can have one rule containing terrain, mask and priority. Priority resolves multiple candidates within the same terrain in the generated engine resource.
 
-This follows Godot 4's `TileSet` / `TileMapLayer` model rather than the deprecated `TileMap` workflow.
+### Godot 4 terrain delivery
 
-### Unity 2D
+The generated EditorScript builds a native `TileSet` with `TileSetAtlasSource`. When terrain rules exist it also creates a terrain set, chooses `TERRAIN_MODE_MATCH_SIDES` for `cardinal4` or `TERRAIN_MODE_MATCH_CORNERS_AND_SIDES` for `eight8`, assigns each tile's `TileData.terrain_set/terrain`, and writes terrain peering bits. The resulting `.tres` is designed for Godot 4 `TileMapLayer` terrain painting / `set_cells_terrain_connect()` workflows.
 
-The generated Editor builder creates native `UnityEngine.Tilemaps.Tile` assets under:
+### Unity 2D autotile delivery
 
-```text
-Assets/GameCreaterPack/Tiles/<tileset_id>/
-```
+Game Ready Pack remains self-contained and does not require the optional 2D Tilemap Extras `RuleTile`. It generates `Runtime/GameCreaterAutoTile.cs`, a native `TileBase` implementation using `RefreshTile` and `GetTileData`, plus Editor-created AutoTile assets grouped by terrain.
 
-Each Tile references its imported Sprite and uses Sprite collision by default.
+Normal `UnityEngine.Tilemaps.Tile` assets are still generated alongside AutoTiles.
 
 ## Game Ready Pack
 
@@ -158,21 +153,7 @@ Each Tile references its imported Sprite and uses Sprite collision by default.
 POST /api/v1/library/packs/export-game-ready
 ```
 
-Example:
-
-```json
-{
-  "name": "forest_game_ready",
-  "asset_ids": ["asset_tree"],
-  "animation_ids": ["anim_walk"],
-  "tileset_ids": ["tileset_ground"],
-  "engine": "godot4",
-  "include_runtime_config": true,
-  "include_collision_polygons": true
-}
-```
-
-Animation frames and TileSet assets are automatically added to the exported asset dependency set even when they were not explicitly listed in `asset_ids`.
+Animation frames and TileSet assets are automatically included in the dependency set even when omitted from `asset_ids`.
 
 The pack freezes:
 
@@ -182,38 +163,56 @@ runtime_config.json
 game_ready_2d.json
 ```
 
-so asset versions, runtime settings, collision polygons, animation definitions and TileSet definitions remain reproducible.
+`game_ready_2d.json` schema v2 includes collision polygons, animation definitions and TileSet terrain/autotile rules.
 
 ## Human UI
 
 The **2D Game Ready Resources** panel supports:
 
-- generate Polygon Collision from current asset Mask
-- choose solid vs Trigger collision
-- create animation from selected Library assets
-- set FPS / loop
-- create TileSet from selected Library assets
-- set tile size / terrain tags
-- export Godot / Unity / Generic Game Ready Pack
+- Polygon Collision generation
+- Sprite Animation creation
+- animation selection and drag frame reordering
+- frame duplicate/remove
+- TileSet creation
+- `cardinal4` / `eight8` Autotile mode
+- Terrain Rule templates and bitmask editing
+- Godot / Unity / Generic Game Ready export
 
 ## AI-native operations
 
-Examples available automatically through `/api/v1/ai/tools`:
+Important actions exposed through `/api/v1/ai/tools` include:
 
 ```text
 post.library.assets.asset_id.collision.polygon.generate
 patch.library.assets.asset_id.collision.polygon
 post.library.animations
 patch.library.animations.clip_id
+put.library.animations.clip_id.frames
 post.library.tilesets
 patch.library.tilesets.tileset_id
 post.library.packs.export.game.ready
 ```
 
-An AI agent can therefore generate/adjust collision geometry, assemble animation frames, group tiles and deliver an engine package without simulating UI clicks.
+The TileSet schemas expose `autotile_mode` and typed `terrain_rules`, so AI agents do not need to encode undocumented strings.
 
-## Validation boundary
+## Real engine validation
 
-CI validates the Python data model, persistence, dependency expansion, exported package contents, Godot text serialization rules used here, Unity builder source generation, frontend JavaScript syntax and AI action schemas.
+Core CI validates Python persistence, package structure, generated source/text syntax, frontend JavaScript and AI schemas. It does not install heavyweight proprietary/game editors.
 
-Actual Godot Editor import and Unity Editor C# compilation still require target-machine integration tests; CI does not claim those external engine runs have already happened.
+For a real local Godot 4 validation:
+
+```bash
+python scripts/validate_godot_game_ready.py path/to/godot_pack.zip --godot godot
+```
+
+The validator creates a temporary project and uses the real Godot binary for `--import`, `--check-only` on generated TileSet scripts, and resource `load()` checks.
+
+For a real local Unity validation:
+
+```bash
+python scripts/validate_unity_game_ready.py path/to/unity_pack.zip --unity "C:/Program Files/Unity/Hub/Editor/<version>/Editor/Unity.exe"
+```
+
+The validator creates a real empty Unity project in batch mode, copies the pack into `Assets/GameCreaterPack`, executes `GameCreaterGameReady2DBuilder.Build`, and verifies generated Prefab/Animation/Tile folders. A valid local Unity Editor installation/license is required.
+
+These scripts make the external validation boundary executable rather than leaving it as a manual checklist.
