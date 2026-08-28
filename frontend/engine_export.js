@@ -1,19 +1,28 @@
 (() => {
   const manifestLink = document.getElementById("manifestLink");
   const godotLink = document.getElementById("godotLink");
-  if (!manifestLink || !godotLink) return;
+  const unityLink = document.getElementById("unityLink");
+  if (!manifestLink || !godotLink || !unityLink) return;
+
+  function hide(link) {
+    link.classList.add("hidden");
+    link.removeAttribute("href");
+  }
 
   function sync() {
     const href = manifestLink.getAttribute("href") || "";
     const match = href.match(/\/workspace\/([0-9a-f]{12})\/scene\.json/);
     if (!match) {
-      godotLink.classList.add("hidden");
-      godotLink.removeAttribute("href");
+      hide(godotLink);
+      hide(unityLink);
       return;
     }
+
     const sceneId = match[1];
     godotLink.href = `/api/v1/scenes/${sceneId}/export/godot.zip`;
+    unityLink.href = `/api/v1/scenes/${sceneId}/export/unity.zip`;
     godotLink.classList.remove("hidden");
+    unityLink.classList.remove("hidden");
   }
 
   new MutationObserver(sync).observe(manifestLink, {
