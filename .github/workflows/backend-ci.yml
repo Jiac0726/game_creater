@@ -44,6 +44,12 @@ jobs:
           node --check ../frontend/engine_export.js
           node --check ../frontend/workflow.js
           node --check ../frontend/completion.js
+          node --check ../frontend/asset_library.js
+          node --check ../frontend/asset_workflow.js
+          node --check ../frontend/asset_workflow_advanced.js
+          node --check ../frontend/asset_runtime.js
+          node --check ../frontend/asset_2d.js
+          node --check ../frontend/store.js
 
       - name: Check local AI helper scripts
         run: |
@@ -56,4 +62,7 @@ jobs:
           python ../scripts/verify_grounded_sam2_env.py --help >/dev/null
           python ../scripts/smoke_test_grounded_sam2.py --help >/dev/null
           python ../scripts/validate_scene_output.py --help >/dev/null
+          python ../scripts/validate_godot_game_ready.py --help >/dev/null
+          python ../scripts/validate_unity_game_ready.py --help >/dev/null
+          python -m py_compile ../scripts/validate_godot_game_ready.py ../scripts/validate_unity_game_ready.py
           python -m py_compile ../birefnet_worker/server.py

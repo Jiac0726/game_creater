@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.completion_models import AssetCompletionResult
+from app.services.asset_library import AssetLibrary
 from app.services.generation_providers import (
     ImageGenerationError,
     ImageGenerationProviderRegistry,
@@ -12,6 +13,7 @@ from app.services.generation_providers import (
 from app.services.pipeline import AssetSplitPipeline
 from app.services.project_store import ProjectStore
 from app.services.prompt_builder import PromptBuilder
+from app.services.scene_store import SceneStore
 from app.services.semantic_engine import SemanticEngine
 from app.workflow_models import (
     CompletionJob,
@@ -23,16 +25,13 @@ from app.workflow_models import (
 
 
 class WorkflowManager:
-    """Synchronous orchestration for the first end-to-end production workflow.
-
-    The manager deliberately persists every boundary between subsystems. A later
-    background/job runner can call the same stage methods without changing the
-    project file contract.
-    """
+    """Synchronous orchestration for the first end-to-end production workflow."""
 
     def __init__(self, workspace: str | Path, pipeline: AssetSplitPipeline) -> None:
         self.workspace = Path(workspace)
         self.store = ProjectStore(self.workspace)
+        self.scene_store = SceneStore(self.workspace)
+        self.asset_library = AssetLibrary(self.workspace)
         self.semantic = SemanticEngine()
         self.prompt_builder = PromptBuilder()
         self.providers = ImageGenerationProviderRegistry()
@@ -110,6 +109,10 @@ class WorkflowManager:
                     "Sending generated scene into detection and segmentation",
                 )
                 manifest = self.pipeline.run(output_path, plan.detection_prompts)
+                # Add Project provenance after the generic scene pipeline has
+                # already assigned stable global library IDs.
+                self.asset_library.sync_scene(manifest, project_id=project_id)
+                self.scene_store.save(manifest)
                 record.scene_id = manifest.scene_id
                 self.store.event(
                     record,
@@ -119,6 +122,9 @@ class WorkflowManager:
                         "scene_id": manifest.scene_id,
                         "asset_count": len(manifest.assets),
                         "planned_asset_count": len(plan.assets),
+                        "library_asset_ids": [
+                            asset.library_asset_id for asset in manifest.assets if asset.library_asset_id
+                        ],
                     },
                 )
             else:
@@ -167,6 +173,27 @@ class WorkflowManager:
                 },
             )
         )
+
+        scene = self.scene_store.load(result.scene_id)
+        source_asset = next((asset for asset in scene.assets if asset.id == result.asset_id), None)
+        if source_asset and source_asset.library_asset_id:
+            self.asset_library.add_version(
+                source_asset.library_asset_id,
+                kind="ai_completed",
+                image_path=f"{result.scene_id}/{result.completed_asset}",
+                mask_path=f"{result.scene_id}/{result.completed_mask}",
+                metadata={
+                    "completion_job_id": result.job_id,
+                    "provider": result.provider,
+                    "mode": result.mode,
+                    "rect": result.rect.model_dump(),
+                    "resegmented": result.resegmented,
+                    "confidence": result.confidence,
+                    "original_asset_unchanged": True,
+                },
+                activate=False,
+            )
+
         self.store.event(
             record,
             WorkflowStage.ASSET_REVIEW,

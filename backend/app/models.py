@@ -13,6 +13,7 @@ class BBox(BaseModel):
 
 class AssetRecord(BaseModel):
     id: str
+    library_asset_id: Optional[str] = None
     label: str
     category: str = "uncategorized"
     confidence: float = 0.0

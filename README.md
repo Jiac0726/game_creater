@@ -1,142 +1,132 @@
 # Game Creater
 
-本地优先的游戏素材 AI 生产工具。
+本地优先的 AI 游戏素材生产、管理与交易工具。
 
 ```text
 中文场景概念
-→ 本地 Game Asset Ontology
-→ GroundingDINO 英文 Prompt
+→ 本地 Game Asset Ontology / Asset Plan
+→ 大模型生图 Provider
+→ 场景图自动回传
 → GroundingDINO 检测
 → bbox 去重
 → SAM2 / SAM2.1
 → Mask 去重
 → 透明 PNG / Mask / Overlay
+→ Asset Library 全局入库
 → 人工删除 / 合并 / 拆分 / 重命名
 → SAM 正点 / 负点添加或修正 Mask
-→ 可选 BiRefNet 边缘 Alpha 精修
-→ 语义增强 Asset Score
-→ 场景覆盖率 / 缺失素材推荐
-→ scene.json / ZIP
+→ 可选 BiRefNet 边缘 Alpha 精修（版本化）
+→ 可选 IOPaint / LaMa 局部补全（版本化、待审核）
+→ Asset Store 上架 / 授权 / 下载
+→ Scene Layout
+→ Godot 4 / Unity 2D 导出
 ```
 
-语义联想、素材管理和 Mock 流程均可完全离线运行，不依赖 ChatGPT、OpenAI API 或在线大模型服务。真实拆图使用本地 GroundingDINO + SAM2；BiRefNet 是独立可选 sidecar。
+语义联想、Asset Library、Asset Store Mock 交易和 Mock 生图/拆图流程可完全离线运行。真实生图可接 OpenAI Image API；真实拆图使用本地 GroundingDINO + SAM2；BiRefNet 与 IOPaint 都作为可替换本地 sidecar。
+
+完整 v1 流程文档：`docs/FULL_WORKFLOW.md`  
+Asset Library 文档：`docs/ASSET_LIBRARY.md`  
+Asset Store 文档：`docs/ASSET_STORE.md`
 
 ## 当前能力
 
-### v0.1 图片 AI 拆解
+### v1 AI 场景全流程
 
-- PNG / JPG / WEBP 场景上传
-- GroundingDINO 开放词汇检测
-- SAM2 / SAM2.1 分割
-- bbox confidence + IoU 去重
-- Mask IoU 二次去重
-- `scene.json -> inference_stats` 记录去重前后数量
-- 透明 RGBA PNG / Mask / Overlay / ZIP
-- 模型健康检查
-- Mock 后端 + CI
+- 中文场景概念 → 本地 Asset Plan
+- 根据 Asset Plan 自动构建“方便后续拆图”的生图 Prompt
+- 可替换 ImageGenerationProvider
+  - Mock：CI / 离线验证
+  - OpenAI：默认 `gpt-image-2`
+- 生图结果直接保存到 Project 并自动进入拆图，不需要浏览器重新上传
+- Project 状态持久化：语义规划 / 生图 / 拆图 / 补全 / 导出
+- `POST /api/v1/projects/run` 一次执行语义 → 生图 → 自动拆图
 
-### v0.2 人工校正
+### Asset Library · 游戏素材库
 
-- 名称 / 分类 / 备注持久化
-- 删除错误素材
-- 多 Mask 合并
-- 矩形拆分 Mask
-- Scene Viewer 拖拽拆分区域
-- SAM 正点 / 负点新建素材
-- SAM 正点 / 负点精修已有素材
-- 编辑后自动重建 PNG / Mask / Overlay / JSON
-- 语义增强 Asset Score
+每个拆出的素材都会自动进入全局素材库，并获得稳定的 `library_asset_id`。
 
-### v0.3 本地语义联想
-
-- 自建 Game Asset Ontology
-- 中文场景概念与修饰词匹配
-- 建筑 / 结构 / 道具 / 植被 / 地形 / 载具 / 生物 / 效果 / 材质分组
-- 状态 + 资产组合词
-- 中文概念 → GroundingDINO 英文对象 Prompt
-- Web 关键词树
-- 一键“应用到拆图” / “联想并拆图”
-- 场景本体覆盖率
-- 缺失素材推荐
-- 本体语义价值接入 Asset Score
-
-首批本体：
+Asset Library 采用：
 
 ```text
-森林 / 地铁站 / 工厂 / 海边渔村 / 洞穴 / 城堡 / 酒馆 / 城市小巷
+SQLite metadata/index
++
+原 Scene / Project 文件系统
 ```
 
-### v0.4 BiRefNet 边缘精修
+不会因为加入多个分类或 Collection 复制 PNG。
 
-BiRefNet 不直接替换 SAM 的对象归属判断，只参与 **SAM 边界带** 的软 Alpha：
+当前支持：
+
+- Stable Global Asset ID
+- 名称 / 分类 / 子分类 / 标签 / 备注
+- Review State：`needs_review / approved / production_ready / in_use / archived`
+- 收藏
+- Asset Score 搜索与筛选
+- Collection 逻辑分组
+- Asset Relations：`parent_of / variant_of / derived_from / part_of / related_to`
+- Provenance：Project / Scene / Source / Prompt / bbox / 推理模式 / Score components
+- Asset Version 历史
+- Scene 删除素材后 Library 自动归档，不抹除历史
+- 历史 Scene 一键重新索引
+- 批量审核 / 批量收藏 / 批量标签 / 批量加入 Collection
+- Asset Library 网格 + Inspector 管理界面
+
+版本策略：
 
 ```text
-SAM 二值 Mask
-→ 膨胀 / 腐蚀得到边界带
-→ BiRefNet 预测前景 Alpha
-→ 只在边界带采用 BiRefNet
-→ SAM 核心区域保持不变
-→ 重写透明 PNG Alpha
+v1 segmented
+v2 birefnet_refined
+v3 ai_completed (默认不自动激活)
 ```
 
-设计约束：
+BiRefNet 与 AI 补全不会再直接覆盖最初的拆图历史。
 
-- 硬 `mask` 不变
-- bbox 不变
-- 合并 / 拆分仍使用硬 Mask
-- BiRefNet 失败不会破坏几何数据
-- 默认关闭
-- 独立 Python sidecar 环境
-- sidecar 只收发内存 PNG(base64)，不接受任意本地文件路径
+### v1.1 Asset Store · 游戏素材商店
 
-之所以独立运行，是因为 BiRefNet 官方当前依赖包含 `numpy<2`、`torch>=2.5.0`，而主后端当前使用 NumPy 2.x；分离环境可避免依赖冲突。
-
-## 项目结构
+Asset Store 直接建立在 Asset Library 之上，不复制素材文件。
 
 ```text
-game_creater/
-├─ backend/
-│  ├─ app/
-│  │  ├─ main.py
-│  │  ├─ models.py
-│  │  └─ services/
-│  │     ├─ pipeline.py
-│  │     ├─ grounded_sam2_local.py
-│  │     ├─ detection_filter.py
-│  │     ├─ asset_editor.py
-│  │     ├─ asset_scoring.py
-│  │     ├─ semantic_engine.py
-│  │     ├─ semantic_scoring.py
-│  │     ├─ scene_recommender.py
-│  │     ├─ birefnet_sidecar.py
-│  │     └─ edge_refinement.py
-│  ├─ tests/
-│  └─ requirements*.txt
-├─ birefnet_worker/
-│  ├─ server.py
-│  └─ requirements.txt
-├─ data/game_asset_ontology.json
-├─ config/grounded_sam2.env.example
-├─ docs/REAL_GPU_VALIDATION.md
-├─ scripts/
-│  ├─ setup_grounded_sam2_wsl.sh
-│  ├─ verify_grounded_sam2_env.py
-│  ├─ start_grounded_sam2_wsl.sh
-│  ├─ smoke_test_grounded_sam2.py
-│  ├─ validate_scene_output.py
-│  ├─ setup_birefnet_sidecar.sh
-│  └─ start_birefnet_sidecar.sh
-├─ frontend/
-│  ├─ app.js
-│  ├─ semantic.js
-│  ├─ point_prompt.js
-│  ├─ edge_refine.js
-│  └─ ...
-├─ workspace/
-└─ validation_output/
+Asset Library
+→ Review / Production Ready
+→ Store Listing
+→ Storefront
+→ Cart
+→ Checkout Provider
+→ Order
+→ Entitlement
+→ Version-locked ZIP Download
 ```
 
-## 1. 最快启动：Mock
+当前支持：
+
+- `approved / production_ready / in_use` 素材公开上架
+- `needs_review / archived` 禁止直接公开售卖，可保存 Draft
+- Draft / Published / Archived 商品状态
+- Personal / Commercial / Extended 三档授权
+- 免费与付费定价
+- 商品搜索、分类、授权类型、免费/精选筛选
+- 创作者中心：从当前 Asset Library 选中素材直接上架
+- 购物车
+- 可替换 `StorePaymentProvider`
+- Mock Checkout：只用于本地交易流程验证，不会真实收款
+- Order / Order Items
+- Entitlement 授权凭证
+- 购买时冻结 Asset Version
+- 已购素材库
+- Entitlement-gated 下载
+- 下载 ZIP：`asset.png / mask.png / alpha.png / metadata.json / LICENSE.txt`
+- 销量 / 下载量 / 商店统计
+- 商店私有状态保存到 `.game_creater_state/store.db`，不放在静态 `/workspace` 下
+
+Mock 付费模拟可关闭：
+
+```bash
+export GAME_CREATER_ALLOW_MOCK_PAID=0
+```
+
+**当前版本是本地 Marketplace MVP，不是可直接公网运营的商城。**
+
+## 快速启动：Mock
 
 Windows PowerShell：
 
@@ -158,244 +148,89 @@ uvicorn app.main:app --reload --port 8000
 http://127.0.0.1:8000
 ```
 
-## 2. GroundingDINO + SAM2 真实模式
-
-推荐：WSL2 Ubuntu / Linux + NVIDIA GPU。
-
-Grounded-SAM-2 当前官方安装说明要求 Python 3.10、torch >= 2.3.1、torchvision >= 0.18.1，并强调 GroundingDINO 的 Deformable Attention 需要 CUDA 编译环境。因此 `torch.cuda.is_available()==True` 并不等于 GroundingDINO 一定能编译。
-
-先安装与显卡匹配的 CUDA 版 PyTorch，然后：
-
-```bash
-bash scripts/setup_grounded_sam2_wsl.sh
-```
-
-脚本会检查：
+页面包含：
 
 ```text
-Python
-PyTorch / TorchVision
-nvidia-smi
-CUDA_HOME
-nvcc
-GroundingDINO config / checkpoint
-SAM2 checkpoint
+AI 场景全流程
+Asset Editor
+Asset Library
+Asset Store
+局部补全
+Godot / Unity 导出
 ```
 
-并生成：
+## API 总览
+
+### 工作流
 
 ```text
-~/.config/game_creater/grounded_sam2.env
+POST /api/v1/projects/run
+GET  /api/v1/projects/<project_id>
 ```
 
-环境验证：
-
-```bash
-python scripts/verify_grounded_sam2_env.py
-```
-
-启动：
-
-```bash
-bash scripts/start_grounded_sam2_wsl.sh
-```
-
-真实图片 smoke test：
-
-```bash
-python scripts/smoke_test_grounded_sam2.py \
-  --image /mnt/c/path/to/scene.png \
-  --keyword "废弃地铁站"
-```
-
-输出校验：
-
-```bash
-python scripts/validate_scene_output.py validation_output/<scene_id>
-```
-
-完整协议：`docs/REAL_GPU_VALIDATION.md`。
-
-## 3. 多实例去重
-
-默认：
+### Asset Library
 
 ```text
-GAME_CREATER_DEDUPE_IOU=0.65
-GAME_CREATER_CROSS_LABEL_DEDUPE_IOU=0.92
-GAME_CREATER_MASK_DEDUPE_IOU=0.86
-GAME_CREATER_CROSS_LABEL_MASK_DEDUPE_IOU=0.96
+GET   /api/v1/library/stats
+GET   /api/v1/library/assets
+PATCH /api/v1/library/assets/<asset_id>
+POST  /api/v1/library/assets/bulk
+GET   /api/v1/library/assets/<asset_id>/versions
+GET   /api/v1/library/assets/<asset_id>/relations
+POST  /api/v1/library/reindex
 ```
 
-`scene.json` 示例：
-
-```json
-{
-  "inference_stats": {
-    "raw_detections": 18,
-    "valid_detections": 18,
-    "after_box_dedupe": 13,
-    "after_mask_dedupe": 11,
-    "box_duplicates_removed": 5,
-    "mask_duplicates_removed": 2
-  }
-}
-```
-
-## 4. SAM 正点 / 负点修正
+### Asset Store
 
 ```text
-绿色点：包含目标
-红色点：排除背景
+GET    /api/v1/store/stats
+GET    /api/v1/store/listings
+GET    /api/v1/store/payment/providers
+GET    /api/v1/store/seller/listings
+POST   /api/v1/store/seller/listings
+PATCH  /api/v1/store/seller/listings/<listing_id>
+GET    /api/v1/store/cart
+POST   /api/v1/store/cart/<listing_id>
+DELETE /api/v1/store/cart/<listing_id>
+POST   /api/v1/store/checkout
+GET    /api/v1/store/orders
+GET    /api/v1/store/library
+GET    /api/v1/store/downloads/<entitlement_id>
 ```
 
-API：
+## 部署边界
+
+当前是 **localhost / local-first 开发工具**，不要直接把 FastAPI 开发服务器暴露到公网。
+
+正式多用户商店至少还需要：
 
 ```text
-POST /api/v1/scenes/<scene_id>/assets/point-segment
+身份认证 / RBAC
+真正支付 Provider + Webhook
+创作者分账
+对象存储 / CDN / 签名下载
+税务 / 发票 / 退款
+授权条款
+内容审核 / 投诉
+多租户资源权限
 ```
 
-可用于：
+## CI
 
-- GroundingDINO 漏检 → 新建素材
-- Mask 多出背景 → 负点
-- Mask 缺失部分 → 正点
-- 现有素材精修 → 正点/负点 + 现有 bbox
+Core CI 已覆盖：
 
-## 5. BiRefNet 可选 sidecar
-
-官方 BiRefNet 代码为 MIT License。当前 sidecar 默认模型：
-
-```text
-ZhengPeng7/BiRefNet_HR-matting
-```
-
-安装：
-
-```bash
-bash scripts/setup_birefnet_sidecar.sh
-```
-
-脚本会：
-
-- 创建独立 venv
-- 安装 BiRefNet 依赖
-- 从 Hugging Face 解析模型具体 revision SHA
-- 下载并缓存该固定 revision
-- 运行时强制 `local_files_only=1`
-- 生成 `~/.config/game_creater/birefnet.env`
-
-启动 sidecar：
-
-```bash
-bash scripts/start_birefnet_sidecar.sh
-```
-
-然后重启主后端：
-
-```bash
-bash scripts/start_grounded_sam2_wsl.sh
-```
-
-主后端会自动读取可选的 `birefnet.env`。
-
-状态：
-
-```text
-GET /api/v1/edge-refiner/status
-```
-
-精修当前素材：
-
-```text
-POST /api/v1/scenes/<scene_id>/assets/<asset_id>/refine-edge
-```
-
-请求：
-
-```json
-{ "radius": 6 }
-```
-
-前端也提供 `BiRefNet 精修当前素材` 按钮；sidecar 未启动时自动禁用。
-
-## 6. 语义增强 Asset Score
-
-```text
-35% 检测置信度
-20% 相对面积
-12% Mask 填充度
-13% 边界完整度
-20% Game Asset Ontology 语义价值
-```
-
-未知资产保留中性语义底分，不会因为本体尚未收录就被自动删除。
-
-## 7. 主要 API
-
-```text
-GET  /api/v1/semantic/catalog
-POST /api/v1/semantic/expand
-POST /api/v1/scenes/analyze
-POST /api/v1/scenes/<scene_id>/recommendations
-POST /api/v1/scenes/<scene_id>/assets/point-segment
-POST /api/v1/scenes/<scene_id>/assets/<asset_id>/refine-edge
-PATCH /api/v1/scenes/<scene_id>/assets/<asset_id>
-DELETE /api/v1/scenes/<scene_id>/assets/<asset_id>
-POST /api/v1/scenes/<scene_id>/assets/merge
-POST /api/v1/scenes/<scene_id>/assets/<asset_id>/split
-GET /api/v1/scenes/<scene_id>/export.zip
-```
-
-## 8. 测试与 CI
-
-```bash
-cd backend
-python -m pip install -r requirements-dev.txt
-python -m pytest -q
-```
-
-Core CI 当前覆盖：
-
-```text
-语义本体 / 中文扩展 / 英文 Prompt
-场景覆盖率 / 缺失素材推荐
-GroundingDINO bbox 去重
-SAM Mask 去重
-Fake Grounded-SAM2 适配器
-RGBA / Mask / Overlay / JSON / ZIP
-改名 / 删除 / 合并 / 拆分
-SAM 正点 / 负点 Fake-SAM API
-Fake-BiRefNet 边缘 Alpha 精修
-前端 app / semantic / point_prompt / edge_refine JS 语法
-Grounded-SAM2 与 BiRefNet setup/start 脚本语法
-BiRefNet worker Python 语法
-```
-
-## 开发路线
-
-### 已完成代码
-
-- [x] v0.1 图片拆解主链
-- [x] v0.2 人工校正 + 双层去重 + SAM 点修
-- [x] v0.3 本地语义联想 + 缺失素材推荐
-- [x] v0.4 可选 BiRefNet 边缘 Alpha 精修 sidecar
-
-### 待实机验证
-
-- [ ] WSL2 + NVIDIA 真实 GroundingDINO/SAM2 场景图
-- [ ] BiRefNet HR-matting 真实游戏素材边缘效果
-- [ ] 不同去重阈值的真实场景统计
-
-### 下一阶段
-
-- 扩充 Game Asset Ontology
-- Embedding 候选召回
-- 遮挡检测与局部补全
-- Depth 前景 / 中景 / 背景分层
-- Unity / Godot 自动导出
-- AI 生图 → 拆图 → 配置 → 场景完整流水线
-
-## 设计原则
-
-模型不是核心数据结构。检测器、分割器、语义模型、边缘精修模型和后续补全模型都通过独立适配层接入；素材管理核心只依赖统一的 `Detection / Mask / Asset / SceneManifest` 数据结构。
+- Semantic / Asset Plan
+- Mock generation → automatic split
+- GroundingDINO/SAM2 fake integration
+- Asset Editor
+- Asset Library 自动索引、标签、Collection、关系、版本、来源
+- Library ↔ Scene 双向同步
+- BiRefNet 版本化精修
+- AI Completion 版本化
+- Asset Store 上架规则
+- Store search / cart / Mock checkout
+- Order / Entitlement / version-locked download
+- ZIP license / metadata
+- Godot / Unity export
+- Frontend JavaScript syntax
+- Local AI helper scripts

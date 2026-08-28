@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.models import AssetPatch, AssetRecord, SceneManifest
+from app.services.asset_library import AssetLibrary
 from app.services.asset_scoring import score_from_components
 from app.services.semantic_scoring import semantic_asset_value
 
@@ -20,6 +21,7 @@ class SceneStore:
 
     def __init__(self, workspace: str | Path) -> None:
         self.workspace = Path(workspace)
+        self.asset_library = AssetLibrary(self.workspace)
 
     def load(self, scene_id: str) -> SceneManifest:
         manifest_path = self.workspace / scene_id / "scene.json"
@@ -32,6 +34,9 @@ class SceneStore:
         if not scene_dir.is_dir():
             raise SceneNotFoundError(manifest.scene_id)
 
+        # Sync first so newly-created scene-local assets receive stable global
+        # library IDs before scene.json is written.
+        self.asset_library.sync_scene(manifest)
         manifest_path = scene_dir / "scene.json"
         manifest_path.write_text(
             manifest.model_dump_json(indent=2),
@@ -78,6 +83,6 @@ class SceneStore:
 
             manifest.assets[index] = updated
             self.save(manifest)
-            return updated
+            return manifest.assets[index]
 
         raise AssetNotFoundError(asset_id)
