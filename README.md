@@ -1,27 +1,119 @@
 # Game Creater
 
-本地优先的游戏素材 AI 生产工具。
+本地优先的 AI 游戏素材生产与管理工具。
 
 ```text
 中文场景概念
-→ 本地 Game Asset Ontology
-→ GroundingDINO 英文 Prompt
+→ 本地 Game Asset Ontology / Asset Plan
+→ 大模型生图 Provider
+→ 场景图自动回传
 → GroundingDINO 检测
 → bbox 去重
 → SAM2 / SAM2.1
 → Mask 去重
 → 透明 PNG / Mask / Overlay
+→ Asset Library 全局入库
 → 人工删除 / 合并 / 拆分 / 重命名
 → SAM 正点 / 负点添加或修正 Mask
-→ 可选 BiRefNet 边缘 Alpha 精修
-→ 语义增强 Asset Score
-→ 场景覆盖率 / 缺失素材推荐
-→ scene.json / ZIP
+→ 可选 BiRefNet 边缘 Alpha 精修（版本化）
+→ 可选 IOPaint / LaMa 局部补全（版本化、待审核）
+→ Scene Layout
+→ Godot 4 / Unity 2D 导出
 ```
 
-语义联想、素材管理和 Mock 流程均可完全离线运行，不依赖 ChatGPT、OpenAI API 或在线大模型服务。真实拆图使用本地 GroundingDINO + SAM2；BiRefNet 是独立可选 sidecar。
+语义联想、Asset Library、Mock 生图/拆图流程可完全离线运行。真实生图可接 OpenAI Image API；真实拆图使用本地 GroundingDINO + SAM2；BiRefNet 与 IOPaint 都作为可替换本地 sidecar。
+
+完整 v1 流程文档：`docs/FULL_WORKFLOW.md`  
+Asset Library 文档：`docs/ASSET_LIBRARY.md`
 
 ## 当前能力
+
+### v1 AI 场景全流程
+
+- 中文场景概念 → 本地 Asset Plan
+- 根据 Asset Plan 自动构建“方便后续拆图”的生图 Prompt
+- 可替换 ImageGenerationProvider
+  - Mock：CI / 离线验证
+  - OpenAI：默认 `gpt-image-2`
+- 生图结果直接保存到 Project 并自动进入拆图，不需要浏览器重新上传
+- Project 状态持久化：语义规划 / 生图 / 拆图 / 补全 / 导出
+- `POST /api/v1/projects/run` 一次执行语义 → 生图 → 自动拆图
+
+### Asset Library · 游戏素材库
+
+每个拆出的素材都会自动进入全局素材库，并获得稳定的 `library_asset_id`。
+
+Asset Library 采用：
+
+```text
+SQLite metadata/index
++
+原 Scene / Project 文件系统
+```
+
+不会因为加入多个分类或 Collection 复制 PNG。
+
+当前支持：
+
+- Stable Global Asset ID
+- 名称 / 分类 / 子分类 / 标签 / 备注
+- Review State
+  - `needs_review`
+  - `approved`
+  - `production_ready`
+  - `in_use`
+  - `archived`
+- 收藏
+- Asset Score 搜索与筛选
+- Collection 逻辑分组
+- Asset Relations
+  - `parent_of`
+  - `variant_of`
+  - `derived_from`
+  - `part_of`
+  - `related_to`
+- Provenance 来源追踪
+  - Project
+  - Scene
+  - Source image
+  - Prompt
+  - bbox
+  - 推理模式
+  - Score components
+- Asset Version 历史
+- Scene 删除素材后 Library 自动归档，不抹除历史
+- 历史 Scene 一键重新索引
+- 批量审核 / 批量收藏 / 批量标签 / 批量加入 Collection
+- Asset Library 网格 + Inspector 管理界面
+
+版本策略：
+
+```text
+v1 segmented
+v2 birefnet_refined     ← 精修后可成为 active
+v3 ai_completed         ← 默认待审核，不静默替换原始素材
+```
+
+BiRefNet 现在不会覆盖原始 PNG；精修结果写入 `versions/` 并记录到 SQLite。IOPaint / LaMa 补全结果同样作为独立版本保存，原始素材保留。
+
+Asset Library API：
+
+```text
+GET    /api/v1/library/stats
+POST   /api/v1/library/reindex
+GET    /api/v1/library/assets
+GET    /api/v1/library/assets/<asset_id>
+PATCH  /api/v1/library/assets/<asset_id>
+POST   /api/v1/library/assets/bulk
+GET    /api/v1/library/assets/<asset_id>/versions
+GET    /api/v1/library/assets/<asset_id>/relations
+POST   /api/v1/library/assets/<asset_id>/relations
+GET    /api/v1/library/collections
+POST   /api/v1/library/collections
+POST   /api/v1/library/collections/<collection_id>/assets
+```
+
+详细说明：`docs/ASSET_LIBRARY.md`。
 
 ### v0.1 图片 AI 拆解
 
@@ -76,20 +168,18 @@ SAM 二值 Mask
 → BiRefNet 预测前景 Alpha
 → 只在边界带采用 BiRefNet
 → SAM 核心区域保持不变
-→ 重写透明 PNG Alpha
+→ 新建 birefnet_refined Asset Version
 ```
 
 设计约束：
 
 - 硬 `mask` 不变
 - bbox 不变
+- 原始 segmented PNG 不覆盖
 - 合并 / 拆分仍使用硬 Mask
-- BiRefNet 失败不会破坏几何数据
 - 默认关闭
 - 独立 Python sidecar 环境
 - sidecar 只收发内存 PNG(base64)，不接受任意本地文件路径
-
-之所以独立运行，是因为 BiRefNet 官方当前依赖包含 `numpy<2`、`torch>=2.5.0`，而主后端当前使用 NumPy 2.x；分离环境可避免依赖冲突。
 
 ## 项目结构
 
@@ -99,39 +189,45 @@ game_creater/
 │  ├─ app/
 │  │  ├─ main.py
 │  │  ├─ models.py
+│  │  ├─ workflow_models.py
+│  │  ├─ workflow_api.py
+│  │  ├─ asset_library_models.py
+│  │  ├─ asset_library_api.py
 │  │  └─ services/
 │  │     ├─ pipeline.py
 │  │     ├─ grounded_sam2_local.py
 │  │     ├─ detection_filter.py
 │  │     ├─ asset_editor.py
+│  │     ├─ asset_library.py
+│  │     ├─ asset_library_sync.py
 │  │     ├─ asset_scoring.py
 │  │     ├─ semantic_engine.py
-│  │     ├─ semantic_scoring.py
-│  │     ├─ scene_recommender.py
+│  │     ├─ prompt_builder.py
+│  │     ├─ generation_providers.py
+│  │     ├─ completion_service.py
+│  │     ├─ completion_providers.py
 │  │     ├─ birefnet_sidecar.py
-│  │     └─ edge_refinement.py
+│  │     ├─ edge_refinement.py
+│  │     ├─ godot_exporter.py
+│  │     └─ unity_exporter.py
 │  ├─ tests/
 │  └─ requirements*.txt
 ├─ birefnet_worker/
-│  ├─ server.py
-│  └─ requirements.txt
 ├─ data/game_asset_ontology.json
-├─ config/grounded_sam2.env.example
-├─ docs/REAL_GPU_VALIDATION.md
+├─ docs/
+│  ├─ FULL_WORKFLOW.md
+│  ├─ ASSET_LIBRARY.md
+│  └─ REAL_GPU_VALIDATION.md
 ├─ scripts/
-│  ├─ setup_grounded_sam2_wsl.sh
-│  ├─ verify_grounded_sam2_env.py
-│  ├─ start_grounded_sam2_wsl.sh
-│  ├─ smoke_test_grounded_sam2.py
-│  ├─ validate_scene_output.py
-│  ├─ setup_birefnet_sidecar.sh
-│  └─ start_birefnet_sidecar.sh
 ├─ frontend/
 │  ├─ app.js
 │  ├─ semantic.js
+│  ├─ workflow.js
+│  ├─ asset_library.js
+│  ├─ completion.js
 │  ├─ point_prompt.js
 │  ├─ edge_refine.js
-│  └─ ...
+│  └─ engine_export.js
 ├─ workspace/
 └─ validation_output/
 ```
@@ -158,45 +254,31 @@ uvicorn app.main:app --reload --port 8000
 http://127.0.0.1:8000
 ```
 
-## 2. GroundingDINO + SAM2 真实模式
+可直接用 Mock 模式验证：
 
-推荐：WSL2 Ubuntu / Linux + NVIDIA GPU。
+```text
+语义联想
+→ Mock 生图
+→ 自动拆图
+→ Asset Library 自动入库
+→ 编辑 / 版本 / Collection / 批量管理
+→ Godot / Unity 导出
+```
 
-Grounded-SAM-2 当前官方安装说明要求 Python 3.10、torch >= 2.3.1、torchvision >= 0.18.1，并强调 GroundingDINO 的 Deformable Attention 需要 CUDA 编译环境。因此 `torch.cuda.is_available()==True` 并不等于 GroundingDINO 一定能编译。
+## 2. 真实生图 + GroundingDINO + SAM2
 
-先安装与显卡匹配的 CUDA 版 PyTorch，然后：
+OpenAI 生图 Provider：
+
+```bash
+export OPENAI_API_KEY="..."
+export GAME_CREATER_OPENAI_IMAGE_MODEL="gpt-image-2"
+```
+
+推荐 WSL2 Ubuntu / Linux + NVIDIA GPU 运行真实拆图。
 
 ```bash
 bash scripts/setup_grounded_sam2_wsl.sh
-```
-
-脚本会检查：
-
-```text
-Python
-PyTorch / TorchVision
-nvidia-smi
-CUDA_HOME
-nvcc
-GroundingDINO config / checkpoint
-SAM2 checkpoint
-```
-
-并生成：
-
-```text
-~/.config/game_creater/grounded_sam2.env
-```
-
-环境验证：
-
-```bash
 python scripts/verify_grounded_sam2_env.py
-```
-
-启动：
-
-```bash
 bash scripts/start_grounded_sam2_wsl.sh
 ```
 
@@ -208,17 +290,18 @@ python scripts/smoke_test_grounded_sam2.py \
   --keyword "废弃地铁站"
 ```
 
-输出校验：
-
-```bash
-python scripts/validate_scene_output.py validation_output/<scene_id>
-```
-
 完整协议：`docs/REAL_GPU_VALIDATION.md`。
 
-## 3. 多实例去重
+## 3. IOPaint / LaMa 局部补全
 
-默认：
+```bash
+bash scripts/setup_iopaint_sidecar.sh
+bash scripts/start_iopaint_sidecar.sh
+```
+
+原始素材不会被补全结果覆盖；补全输出进入 Asset Version 历史并等待审核。
+
+## 4. 多实例去重
 
 ```text
 GAME_CREATER_DEDUPE_IOU=0.65
@@ -227,22 +310,7 @@ GAME_CREATER_MASK_DEDUPE_IOU=0.86
 GAME_CREATER_CROSS_LABEL_MASK_DEDUPE_IOU=0.96
 ```
 
-`scene.json` 示例：
-
-```json
-{
-  "inference_stats": {
-    "raw_detections": 18,
-    "valid_detections": 18,
-    "after_box_dedupe": 13,
-    "after_mask_dedupe": 11,
-    "box_duplicates_removed": 5,
-    "mask_duplicates_removed": 2
-  }
-}
-```
-
-## 4. SAM 正点 / 负点修正
+## 5. SAM 正点 / 负点修正
 
 ```text
 绿色点：包含目标
@@ -255,147 +323,36 @@ API：
 POST /api/v1/scenes/<scene_id>/assets/point-segment
 ```
 
-可用于：
+## 部署说明
 
-- GroundingDINO 漏检 → 新建素材
-- Mask 多出背景 → 负点
-- Mask 缺失部分 → 正点
-- 现有素材精修 → 正点/负点 + 现有 bbox
+当前版本定位为 localhost / 本地优先开发工具。不要直接将开发服务器暴露到公网。
 
-## 5. BiRefNet 可选 sidecar
+桌面化 / 多用户阶段将进一步处理：
 
-官方 BiRefNet 代码为 MIT License。当前 sidecar 默认模型：
+- SQLite 迁至专用 private state 目录
+- 用户权限 / 资源访问控制
+- Schema migration
+- 大规模库可切换 PostgreSQL
 
-```text
-ZhengPeng7/BiRefNet_HR-matting
-```
+## 当前验证
 
-安装：
+Core CI 覆盖：
 
-```bash
-bash scripts/setup_birefnet_sidecar.sh
-```
+- Game Asset Ontology / Semantic Engine / Prompt Builder
+- Mock 生图 → 自动回传 → 自动拆图
+- GroundingDINO / SAM2 Mock 与 Fake integration
+- bbox / Mask 去重
+- Asset Score
+- Scene / Project persistence
+- Asset Library 自动入库和稳定 Global ID
+- Library ↔ Scene 元数据同步
+- 标签 / 搜索 / Review State / Collection / Relations
+- Asset Versions / Archive
+- Project provenance
+- AI Completion version（不自动覆盖 Active Version）
+- BiRefNet version（原 segmented PNG 保留）
+- Godot / Unity 导出
+- 前端 JavaScript syntax
+- 本地 AI helper scripts
 
-脚本会：
-
-- 创建独立 venv
-- 安装 BiRefNet 依赖
-- 从 Hugging Face 解析模型具体 revision SHA
-- 下载并缓存该固定 revision
-- 运行时强制 `local_files_only=1`
-- 生成 `~/.config/game_creater/birefnet.env`
-
-启动 sidecar：
-
-```bash
-bash scripts/start_birefnet_sidecar.sh
-```
-
-然后重启主后端：
-
-```bash
-bash scripts/start_grounded_sam2_wsl.sh
-```
-
-主后端会自动读取可选的 `birefnet.env`。
-
-状态：
-
-```text
-GET /api/v1/edge-refiner/status
-```
-
-精修当前素材：
-
-```text
-POST /api/v1/scenes/<scene_id>/assets/<asset_id>/refine-edge
-```
-
-请求：
-
-```json
-{ "radius": 6 }
-```
-
-前端也提供 `BiRefNet 精修当前素材` 按钮；sidecar 未启动时自动禁用。
-
-## 6. 语义增强 Asset Score
-
-```text
-35% 检测置信度
-20% 相对面积
-12% Mask 填充度
-13% 边界完整度
-20% Game Asset Ontology 语义价值
-```
-
-未知资产保留中性语义底分，不会因为本体尚未收录就被自动删除。
-
-## 7. 主要 API
-
-```text
-GET  /api/v1/semantic/catalog
-POST /api/v1/semantic/expand
-POST /api/v1/scenes/analyze
-POST /api/v1/scenes/<scene_id>/recommendations
-POST /api/v1/scenes/<scene_id>/assets/point-segment
-POST /api/v1/scenes/<scene_id>/assets/<asset_id>/refine-edge
-PATCH /api/v1/scenes/<scene_id>/assets/<asset_id>
-DELETE /api/v1/scenes/<scene_id>/assets/<asset_id>
-POST /api/v1/scenes/<scene_id>/assets/merge
-POST /api/v1/scenes/<scene_id>/assets/<asset_id>/split
-GET /api/v1/scenes/<scene_id>/export.zip
-```
-
-## 8. 测试与 CI
-
-```bash
-cd backend
-python -m pip install -r requirements-dev.txt
-python -m pytest -q
-```
-
-Core CI 当前覆盖：
-
-```text
-语义本体 / 中文扩展 / 英文 Prompt
-场景覆盖率 / 缺失素材推荐
-GroundingDINO bbox 去重
-SAM Mask 去重
-Fake Grounded-SAM2 适配器
-RGBA / Mask / Overlay / JSON / ZIP
-改名 / 删除 / 合并 / 拆分
-SAM 正点 / 负点 Fake-SAM API
-Fake-BiRefNet 边缘 Alpha 精修
-前端 app / semantic / point_prompt / edge_refine JS 语法
-Grounded-SAM2 与 BiRefNet setup/start 脚本语法
-BiRefNet worker Python 语法
-```
-
-## 开发路线
-
-### 已完成代码
-
-- [x] v0.1 图片拆解主链
-- [x] v0.2 人工校正 + 双层去重 + SAM 点修
-- [x] v0.3 本地语义联想 + 缺失素材推荐
-- [x] v0.4 可选 BiRefNet 边缘 Alpha 精修 sidecar
-
-### 待实机验证
-
-- [ ] WSL2 + NVIDIA 真实 GroundingDINO/SAM2 场景图
-- [ ] BiRefNet HR-matting 真实游戏素材边缘效果
-- [ ] 不同去重阈值的真实场景统计
-
-### 下一阶段
-
-- 扩充 Game Asset Ontology
-- Embedding 候选召回
-- 遮挡检测与局部补全
-- Depth 前景 / 中景 / 背景分层
-- Unity / Godot 自动导出
-- AI 生图 → 拆图 → 配置 → 场景完整流水线
-
-## 设计原则
-
-模型不是核心数据结构。检测器、分割器、语义模型、边缘精修模型和后续补全模型都通过独立适配层接入；素材管理核心只依赖统一的 `Detection / Mask / Asset / SceneManifest` 数据结构。
+真实 NVIDIA / WSL2 / OpenAI API / BiRefNet / IOPaint 的生产质量仍需在目标机器与代表性 AI 游戏场景上实测。
