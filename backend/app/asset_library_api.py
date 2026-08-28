@@ -18,6 +18,7 @@ from app.services.asset_library import (
     CollectionNotFoundError,
     LibraryAssetNotFoundError,
 )
+from app.services.asset_library_sync import apply_library_metadata_to_scene
 
 
 def build_asset_library_router(workspace: str | Path) -> APIRouter:
@@ -65,7 +66,9 @@ def build_asset_library_router(workspace: str | Path) -> APIRouter:
     @router.patch("/assets/{asset_id}", response_model=LibraryAsset)
     def patch_asset(asset_id: str, patch: LibraryAssetPatch) -> LibraryAsset:
         try:
-            return library.patch(asset_id, patch)
+            updated = library.patch(asset_id, patch)
+            apply_library_metadata_to_scene(workspace, updated)
+            return updated
         except LibraryAssetNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Library asset not found") from exc
         except ValueError as exc:
