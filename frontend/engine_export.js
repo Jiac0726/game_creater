@@ -25,9 +25,20 @@
     unityLink.classList.remove("hidden");
   }
 
+  function loadExtension(src) {
+    if (document.querySelector(`script[data-game-creater-extension="${src}"]`)) return;
+    const script = document.createElement("script");
+    script.src = src;
+    script.dataset.gameCreaterExtension = src;
+    document.body.appendChild(script);
+  }
+
   new MutationObserver(sync).observe(manifestLink, {
     attributes: true,
     attributeFilter: ["href", "class"],
   });
   sync();
+
+  loadExtension("/workflow.js");
+  loadExtension("/completion.js");
 })();
