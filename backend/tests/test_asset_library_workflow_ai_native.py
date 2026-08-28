@@ -9,11 +9,16 @@ def test_full_asset_library_workflow_is_ai_discoverable() -> None:
 
     required = {
         "post.library.import.image",
+        "post.library.import.images",
         "post.library.assets.asset_id.split",
         "get.library.assets.asset_id.hierarchy",
         "post.library.assets.asset_id.children",
         "delete.library.assets.asset_id.children.child_asset_id",
         "post.library.assets.asset_id.edit",
+        "post.library.assets.bulk.edit",
+        "post.library.assets.asset_id.versions.version.activate",
+        "post.library.assets.parent_asset_id.reparent",
+        "post.library.packs.preflight",
         "post.library.packs.export",
         "get.library.packs.pack_id.download",
     }
@@ -23,7 +28,7 @@ def test_full_asset_library_workflow_is_ai_discoverable() -> None:
     assert actions["delete.library.assets.asset_id.children.child_asset_id"].requires_confirmation is True
 
 
-def test_asset_workflow_tool_schemas_include_split_and_edit_bodies() -> None:
+def test_asset_workflow_tool_schemas_include_split_edit_batch_and_preflight_bodies() -> None:
     tools = {
         item.function["x-game-creater-action"]: item.function
         for item in AIActionRegistry(app).tools().tools
@@ -31,8 +36,13 @@ def test_asset_workflow_tool_schemas_include_split_and_edit_bodies() -> None:
 
     split_body = tools["post.library.assets.asset_id.split"]["parameters"]["properties"]["body"]
     edit_body = tools["post.library.assets.asset_id.edit"]["parameters"]["properties"]["body"]
+    bulk_edit_body = tools["post.library.assets.bulk.edit"]["parameters"]["properties"]["body"]
+    preflight_body = tools["post.library.packs.preflight"]["parameters"]["properties"]["body"]
     export_body = tools["post.library.packs.export"]["parameters"]["properties"]["body"]
 
     assert "mode" in split_body["properties"]
     assert "operation" in edit_body["properties"]
+    assert "asset_ids" in bulk_edit_body["properties"]
+    assert "edit" in bulk_edit_body["properties"]
+    assert "asset_ids" in preflight_body["properties"]
     assert "engine" in export_body["properties"]
