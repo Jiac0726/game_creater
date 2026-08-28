@@ -75,6 +75,8 @@ godot4/
   RUNTIME_IMPORT.md
 ```
 
+Extract the ZIP at the Godot project root so the package remains under `res://godot4/`.
+
 Each generated `.tscn` contains:
 - `Sprite2D`
 - pivot represented through Sprite2D pixel offset
@@ -82,7 +84,7 @@ Each generated `.tscn` contains:
 - optional `StaticBody2D + CollisionShape2D` for solid box collision
 - optional `Area2D + CollisionShape2D` when the box is a trigger
 
-The runtime exporter also corrects the AtlasTexture resource path for the actual `godot4/assets` package layout.
+The runtime exporter also corrects AtlasTexture references to the actual `res://godot4/assets/` package layout.
 
 ## Unity 2D
 
@@ -97,7 +99,7 @@ unity2d/Assets/GameCreaterPack/
     GameCreaterRuntimePrefabBuilder.cs
 ```
 
-Run:
+Copy the package's `Assets/GameCreaterPack` folder into the Unity project `Assets` folder, then run:
 
 ```text
 Game Creater -> Build Runtime Asset Prefabs
