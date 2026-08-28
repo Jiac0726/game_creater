@@ -46,5 +46,6 @@
   loadExtension("/asset_workflow_advanced.js");
   loadExtension("/asset_runtime.js");
   loadExtension("/asset_2d.js");
+  loadExtension("/scene_composer.js");
   loadExtension("/store.js");
 })();
