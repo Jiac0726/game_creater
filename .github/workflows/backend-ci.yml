@@ -49,6 +49,7 @@ jobs:
           node --check ../frontend/asset_workflow_advanced.js
           node --check ../frontend/asset_runtime.js
           node --check ../frontend/asset_2d.js
+          node --check ../frontend/asset_intelligence.js
           node --check ../frontend/store.js
 
       - name: Check local AI helper scripts
