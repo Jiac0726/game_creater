@@ -10,6 +10,7 @@ from app.asset_workflow_models import AssetPackExportRequest, AssetPackExportRes
 class CollisionMode(str, Enum):
     NONE = "none"
     BOX = "box"
+    POLYGON = "polygon"
 
 
 class AssetRuntimeConfig(BaseModel):
