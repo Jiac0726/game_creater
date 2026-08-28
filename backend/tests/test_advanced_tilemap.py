@@ -38,18 +38,18 @@ def _asset(workflow: AssetLibraryWorkflowService, tmp_path: Path, name: str):
 
 def test_terrain_painter_recomputes_cardinal_autotile(tmp_path: Path, monkeypatch) -> None:
     _, workflow, resources, tilemaps = _setup(tmp_path, monkeypatch)
-    isolated = _asset(workflow, tmp_path, "isolated")
+    south_connected = _asset(workflow, tmp_path, "south_connected")
     full = _asset(workflow, tmp_path, "full")
     tileset = resources.create_tileset(
         TileSetCreateRequest(
             name="grass",
-            tile_asset_ids=[isolated.id, full.id],
+            tile_asset_ids=[south_connected.id, full.id],
             tile_width=32,
             tile_height=32,
             terrain_tags=["grass"],
             autotile_mode=AutoTileMode.CARDINAL4,
             terrain_rules=[
-                TileTerrainRule(asset_id=isolated.id, terrain="grass", neighbor_mask=0, priority=0),
+                TileTerrainRule(asset_id=south_connected.id, terrain="grass", neighbor_mask=16, priority=0),
                 TileTerrainRule(asset_id=full.id, terrain="grass", neighbor_mask=85, priority=10),
             ],
         )
@@ -57,11 +57,17 @@ def test_terrain_painter_recomputes_cardinal_autotile(tmp_path: Path, monkeypatc
     project = tilemaps.create(TileMapCreateRequest(name="level", tileset_id=tileset.id, width=8, height=8))
     ground = project.layers[0]
 
-    cells = [TileCoordinate(x=3, y=3), TileCoordinate(x=3, y=2), TileCoordinate(x=4, y=3), TileCoordinate(x=3, y=4), TileCoordinate(x=2, y=3)]
+    cells = [
+        TileCoordinate(x=3, y=3),
+        TileCoordinate(x=3, y=2),
+        TileCoordinate(x=4, y=3),
+        TileCoordinate(x=3, y=4),
+        TileCoordinate(x=2, y=3),
+    ]
     project = tilemaps.paint(project.id, TileMapPaintRequest(layer_id=ground.id, cells=cells, terrain="grass"))
     by_xy = {(cell.x, cell.y): cell for cell in project.layers[0].cells}
     assert by_xy[(3, 3)].asset_id == full.id
-    assert by_xy[(3, 2)].asset_id == isolated.id
+    assert by_xy[(3, 2)].asset_id == south_connected.id
 
 
 def test_collision_navigation_layers_and_engine_exports(tmp_path: Path, monkeypatch) -> None:
