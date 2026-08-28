@@ -44,6 +44,7 @@ jobs:
           node --check ../frontend/engine_export.js
           node --check ../frontend/workflow.js
           node --check ../frontend/completion.js
+          node --check ../frontend/asset_library.js
 
       - name: Check local AI helper scripts
         run: |
