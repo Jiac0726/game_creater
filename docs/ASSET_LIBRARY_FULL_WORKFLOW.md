@@ -1,31 +1,35 @@
 # Asset Library Full Workflow
 
-This workflow turns Asset Library into a complete 2D game-resource production and delivery surface:
+This workflow turns Asset Library into a complete 2D game-resource production, management and engine-delivery surface:
 
 ```text
 Image Import
 -> Split
 -> Hierarchy
 -> Non-destructive Edit / Versions
+-> Runtime Config
+-> Preflight
 -> Asset Pack
 -> Generic / Godot 4 / Unity 2D delivery
 ```
 
-Every operation is a typed `/api/v1/*` API operation. When the AI Native Control Layer is present, the same operations automatically appear in `/api/v1/ai/actions` and `/api/v1/ai/tools`.
+Every operation is a typed `/api/v1/*` API operation. With the AI Native Control Layer, the same operations automatically appear in `/api/v1/ai/actions` and `/api/v1/ai/tools`.
 
 ## Image import
+
+Single image:
 
 ```text
 POST /api/v1/library/import/image
 ```
 
-Multipart fields:
-- `image`: PNG/JPG/JPEG/WEBP
-- `name`
-- `category`
-- `tags`: comma-separated
+Batch image import, up to 200 files:
 
-Imported assets receive a stable global Asset ID and three v1 resources:
+```text
+POST /api/v1/library/import/images
+```
+
+Supported files: PNG/JPG/JPEG/WEBP. Imported assets receive a stable global Asset ID and three v1 resources:
 
 ```text
 library_imports/<asset_id>/
@@ -103,9 +107,15 @@ POST /api/v1/library/assets/<asset_id>/children
 DELETE /api/v1/library/assets/<asset_id>/children/<child_asset_id>
 ```
 
-Hierarchy is metadata only. It does not duplicate PNG files.
+Bulk reparenting:
 
-## Asset editing
+```text
+POST /api/v1/library/assets/<parent_asset_id>/reparent
+```
+
+Reparenting can remove previous parent links and rejects hierarchy cycles. Hierarchy is metadata only and never duplicates PNG files.
+
+## Asset editing and versions
 
 ```text
 POST /api/v1/library/assets/<asset_id>/edit
@@ -119,6 +129,12 @@ Current operations:
 - `flip_vertical`
 - `rotate_90`
 - `pad`
+
+Batch editing:
+
+```text
+POST /api/v1/library/assets/bulk/edit
+```
 
 Editing is non-destructive:
 
@@ -134,14 +150,66 @@ Image, mask and alpha are transformed together and stored under:
 library_versions/<asset_id>/
 ```
 
-The original version remains available in Asset Library history.
+Switch the active version without deleting newer versions:
+
+```text
+POST /api/v1/library/assets/<asset_id>/versions/<version>/activate
+```
+
+This enables rollback while preserving the complete edit history.
+
+## Runtime configuration
+
+Each Library asset can carry game-facing configuration independently from its image version:
+
+```text
+GET   /api/v1/library/assets/<asset_id>/runtime-config
+PATCH /api/v1/library/assets/<asset_id>/runtime-config
+POST  /api/v1/library/assets/bulk/runtime-config
+```
+
+Runtime fields:
+- pivot X / Y
+- Pixels Per Unit
+- render layer
+- sorting order
+- collision mode (`none` / `box`)
+- trigger / area flag
+- gameplay tags
+
+See `docs/ASSET_RUNTIME_CONFIG.md` for the full engine-delivery contract.
+
+## Export Preflight
+
+Validate selected assets before creating a production pack:
+
+```text
+POST /api/v1/library/packs/preflight
+```
+
+Checks include:
+- missing or unreadable active image
+- metadata/image dimension mismatch
+- missing Mask / Alpha when required
+- Mask / Alpha size mismatch
+- review status
+- uncategorized assets
+- invalid active version
+
+The result separates errors and warnings. Human UI and AI agents can use the same report before export.
 
 ## Asset pack export
 
-Create a pack:
+Base pack:
 
 ```text
 POST /api/v1/library/packs/export
+```
+
+Runtime-aware pack:
+
+```text
+POST /api/v1/library/packs/export-runtime
 ```
 
 Example:
@@ -153,13 +221,14 @@ Example:
   "engine": "godot4",
   "include_masks": true,
   "include_alpha": true,
-  "include_hierarchy": true
+  "include_hierarchy": true,
+  "include_runtime_config": true
 }
 ```
 
 A Collection can be supplied through `collection_id` instead of or in addition to explicit asset IDs.
 
-The response contains a pack id and an API download URL:
+Download:
 
 ```text
 GET /api/v1/library/packs/<pack_id>/download
@@ -175,26 +244,33 @@ They are not exposed through the static `/workspace` mount.
 
 ## Generic pack
 
-Contains stable IDs, active versions, dimensions, category, tags, review state, provenance and optional parent/child relationships together with PNG/Mask/Alpha files.
+Contains stable IDs, active versions, dimensions, category, tags, review state, provenance and optional parent/child relationships together with PNG/Mask/Alpha files. Runtime-aware packs additionally include `runtime_config.json`.
 
 ## Godot 4 pack
 
-Includes:
+Base files:
 
 ```text
 godot4/
   assets/
-    <asset_id>.png
   resources/
     <asset_id>.tres
-  README.md
 ```
 
-The `.tres` resources are native Godot 4 `AtlasTexture` resources referencing the exported PNGs.
+Runtime-aware delivery adds:
+
+```text
+godot4/
+  prefabs/
+    <asset_id>.tscn
+  RUNTIME_IMPORT.md
+```
+
+Generated `.tscn` assets contain Sprite2D pivot offset, z-index and optional `StaticBody2D` or `Area2D` box collision.
 
 ## Unity 2D pack
 
-Includes:
+Base files:
 
 ```text
 unity2d/Assets/GameCreaterPack/
@@ -204,35 +280,48 @@ unity2d/Assets/GameCreaterPack/
     GameCreaterPackImporter.cs
 ```
 
-After copying/importing the folder into a Unity project, run:
+Runtime-aware delivery adds:
 
 ```text
-Game Creater -> Configure Imported Asset Pack
+runtime_config.json
+Runtime/GameCreaterRuntimeMetadata.cs
+Editor/GameCreaterRuntimePrefabBuilder.cs
 ```
 
-The Editor tool configures textures as single Sprites with transparency, no mipmaps and 100 pixels per unit.
+Run:
+
+```text
+Game Creater -> Build Runtime Asset Prefabs
+```
+
+The Unity Editor builder sets Sprite pivot, PPU and sorting order, creates optional `BoxCollider2D`, applies trigger state and writes Prefabs with Game Creater runtime metadata.
 
 ## Human UI
 
-The web application exposes one **Asset Library Full Workflow** panel containing:
-- image import
+The web application exposes one Asset Library workflow containing:
+- single and batch image import
 - split mode selection
-- hierarchy inspection
-- versioned editing
-- batch-selected asset pack export
+- hierarchy inspection and reparenting
+- versioned editing and rollback
+- batch non-destructive edits
+- runtime configuration
+- pack Preflight
+- Generic / Godot / Unity pack export
 
 The existing Asset Library remains responsible for search, metadata, Collections, review state, version history and provenance.
 
 ## AI-native contract
 
-The UI does not own any of the above business logic. All mutations go through typed backend operations. Therefore an agent can execute the same workflow without simulating mouse clicks:
+The UI does not own any business logic. All operations go through typed backend actions, so an agent can perform the same workflow without simulating mouse clicks:
 
 ```text
 AI
--> import image
+-> batch import
 -> split
--> inspect hierarchy
--> edit selected child assets
--> create engine pack
+-> assign hierarchy
+-> edit / rollback versions
+-> configure pivot / PPU / layer / collision
+-> run Preflight
+-> create runtime-aware engine pack
 -> download pack
 ```
